@@ -81,7 +81,8 @@ responses).
 - `start()` / `close()`; `wait_ready(timeout)`; `send(command)`.
 - Login: `CONNECT` → `FLAT_CONNECT` → `FLAT_GET_TEMPLATE` → `FLAT_GET`. `ERROR 401` → `AuthError`, no retry.
 - Reconnect after network or server errors with back-off 2 s doubling to a 5 min cap, reset after a successful login.
-- Rate limit applies to the polling loop only; commands go out immediately (deduplicated per device).
+- **One request at a time, paced**: before each request (login, polls, refreshes, commands) the session counts the requests started in the last 20 s (`n`) and waits until `min(n, 20) × 50 ms` has passed since the previous one. Idle → instant; a burst slows down linearly (50 ms, 100 ms, … 950 ms) to 1 request/s from the 21st request; after 20 s without requests it is instant again. A command interrupts the long poll, which is abandoned before the command starts, so a command waits at most 1 s.
+- Commands queue per device: a newer command replaces one not sent yet (it moves to the back of the queue, as before).
 - Hourly full refresh; early refresh when a cover reports moving for more than 2 minutes.
 - Callbacks: `on_status(SessionStatus)`, `on_template(Template)`, `on_state(device_id, state)`.
 - No class-level mutable state.
@@ -105,7 +106,7 @@ Owns everything Home Assistant–specific about the connection.
 |---|---|---|---|
 | `off` | none (switch off) | unavailable | error "connection is turned off" |
 | `connecting` | logging in | last known state | waits for ready, then sends |
-| `connected` | open | live | sent immediately, restarts timer |
+| `connected` | open | live | sent within ≤1 s (paced), restarts timer |
 | `idle` | closed by inactivity timeout | last known state, available | reconnects, waits for ready, sends |
 | `reconnecting` | lost, retrying with back-off | unavailable | error "not connected" |
 | `auth_failed` | stopped, reauth flow started | unavailable | error |

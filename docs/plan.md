@@ -35,13 +35,14 @@ passing tests as their phase lands.
 
 ### Phase 1 — `api/` protocol library
 
-- [ ] `api/models.py`, `api/messages.py`: parse template (declared devices only), states and events; build commands
-- [ ] `api/transport.py`: injected `httpx.AsyncClient`, `json.dumps` payloads, HTTP status check, cancellable long poll, exchange log + history + redaction
-- [ ] `api/session.py`: message-pipe dispatcher, login, `AuthError` on `ERROR 401`, capped back-off (2 s → 5 min, reset on login), poll-only rate limit, command dedup, hourly and stuck-cover refresh, `close()` interrupts the long poll, no class-level state
-- [ ] Port client tests to `tests/api/`; resolves xfails `test_clients_do_not_share_devices`, `test_stop_interrupts_long_poll`, `test_connect_back_off_is_capped`, `test_http_error_reports_status`, `test_commands_are_not_rate_limited`
-- [ ] Connect failures logged once at WARNING with history, recovery at INFO (xfail `test_connect_failure_is_logged_as_warning`)
-- [ ] Trim the spoofed browser headers to what the server needs (verify with a capture)
-- [ ] Fixture loader and `mise run traffic` accept the new `custom_components.entia.api` logger as well as the old one
+- [x] `api/models.py`, `api/messages.py`: parse template (declared devices only, single items accepted where lists are expected), states and events; build commands with `json.dumps`
+- [x] `api/transport.py`: injected HTTP client, HTTP status check, cancellable requests, exchange log + history + redaction (logger `custom_components.entia.api.transport`)
+- [x] `api/session.py`: message-pipe dispatcher, login, `AuthError` on `ERROR 401` (no retry), capped back-off (2 s → 5 min, reset once connected), all requests paced (one at a time; gap = 50 ms × requests in the last 20 s, capped at 1 s, so idle is instant, bursts slow down linearly to 1/s and 20 s of quiet resets it; commands included, replacing the old 20/20 s window that allowed bursts and then held commands), `send()` returns once the request is sent and replaces an unsent command for the same device, hourly and stuck-cover refresh, `close()` interrupts the long poll, status/template/state callbacks (state only on change), injectable clock and sleep, no class-level state
+- [x] Tests in `tests/api/` (messages, transport, session, recorded replay); the old client's xfails `test_clients_do_not_share_devices`, `test_stop_interrupts_long_poll`, `test_connect_back_off_is_capped`, `test_http_error_reports_status` have passing counterparts there and go away with `client/` in phase 5 (`test_commands_are_not_rate_limited` was removed: commands are now paced on purpose)
+- [x] Mutation-checked: close not cancelling, uncapped back-off, unpaced requests, a fixed instead of linear gap, a window that never resets, an uncapped gap, an interrupted poll overlapping the next request and missing `login_hash` redaction all fail the api tests; pytest `timeout = 30` turns hangs into failures
+- [x] Connect failures logged once at WARNING with history, recovery at INFO (old xfail `test_connect_failure_is_logged_as_warning`)
+- [ ] Trim the spoofed browser headers to what the server needs (verify with a capture; `api/transport.py` keeps the old set unchanged until then)
+- [x] Fixture loader and `mise run traffic` accept the new `custom_components.entia.api.transport` logger as well as the old one
 
 ### Phase 2 — hub and setup
 
