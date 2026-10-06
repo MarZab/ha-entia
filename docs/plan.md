@@ -46,13 +46,22 @@ conventions.
 - [ ] Add reauth flow (`async_step_reauth`) to pair with `ConfigEntryAuthFailed`
 - [ ] Optional: diagnostics platform with credentials redacted
 
-## 6. Testing
+## 6. Docker development environment
+
+- [ ] Add `docker-compose.yml` running the official `ghcr.io/home-assistant/home-assistant` image (pinned to the `hacs.json` minimum version)
+- [ ] Bind-mount `custom_components/entia` into `/config/custom_components/entia` for live editing
+- [ ] Keep HA config in a git-ignored `dev/config/` with a minimal `configuration.yaml` (`logger: entia: debug`, `debugpy` optional)
+- [ ] Optionally install HACS in the dev instance to test the custom repository install path
+- [ ] Add a test container/service (or `Makefile` targets) for running `pytest` and linting (`ruff`) with `pytest-homeassistant-custom-component`
+- [ ] Document usage in README (`docker compose up`, restart HA after code changes, port 8123)
+
+## 7. Testing
 
 - [ ] Add a standalone dev script for the client that reads credentials from env vars (old `test_client.py` had hardcoded credentials and was removed)
 - [ ] Add `pytest-homeassistant-custom-component` tests for config flow and setup
 - [ ] Manually verify on a real HA instance: install via HACS custom repo, add entry, control light/fan/cover, restart, reload, remove
 
-## 7. Store listing (optional, later)
+## 8. Store listing (optional, later)
 
 - [ ] Submit brand icons to `home-assistant/brands`
 - [ ] Submit to the HACS default repository list
