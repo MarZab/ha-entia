@@ -1,0 +1,21 @@
+{
+    "config": {
+        "abort": {
+            "already_configured": "Device is already configured"
+        },
+        "error": {
+            "cannot_connect": "Failed to connect",
+            "invalid_auth": "Invalid ID or PIN",
+            "unknown": "Unexpected error"
+        },
+        "step": {
+            "user": {
+                "description": "Please enter your Entia ID and PIN:",
+                "data": {
+                    "password": "PIN",
+                    "username": "Entia ID"
+                }
+            }
+        }
+    }
+}

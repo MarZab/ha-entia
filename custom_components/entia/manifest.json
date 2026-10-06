@@ -1,0 +1,13 @@
+{
+  "domain": "entia",
+  "name": "Entia",
+  "codeowners": ["@marzab"],
+  "config_flow": true,
+  "integration_type": "device",
+  "dependencies": ["recorder"],
+  "iot_class": "cloud_push",
+  "loggers": ["entia"],
+  "requirements": ["httpx"],
+  "version": "0.1.0",
+  "zeroconf": []
+}
