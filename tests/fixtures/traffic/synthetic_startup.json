@@ -1,43 +1,49 @@
 {
-  "source": "synthetic: hand-written from the client parser, replace with a recorded capture",
+  "source": "synthetic: shapes follow the recorded lights_cover_fan.log, values are made up",
   "exchanges": [
     {
       "request": {"cmd": "CONNECT"},
       "response": [
         {"raw": "LOGIN", "time": "1700000000", "data": {"sessid": "SESSION"}},
-        {"raw": "IDENT", "time": "1700000000", "data": {"user": {"pubid": "PIPE"}}}
+        {"raw": "IDENT", "time": "1700000000", "data": {"user": {"casttype": "uni", "pubid": "PIPE"}}}
       ]
     },
     {
       "request": {"cmd": "FLAT_CONNECT"},
       "response": [
-        {"raw": "FLAT_LOGIN", "time": "1700000000", "data": {"flatid": "100"}}
+        {"raw": "FLAT_LOGIN", "time": "1700000000", "data": {"flatid": "100", "sessionkey": "SESSIONKEY", "login_hash": "test-entia-id"}}
       ]
     },
     {
       "request": {"cmd": "FLAT_GET_TEMPLATE"},
       "response": [
-        {"raw": "FLAT_TEMPLATE", "time": "1700000000", "data": {"msg": {"hause": {"floors": {"floor": {"rooms": {"room": [
-          {"elements": {"element": [
-            {"id": 1, "type": 4, "subtype": 1, "label": "Kitchen light"},
-            {"id": 2, "type": 4, "subtype": 4, "label": "Bathroom fan"}
-          ]}},
-          {"elements": {"element": [
-            {"id": 3, "type": 6, "label": "Living room blind"},
-            {"id": 4, "type": 5, "label": "Dimmer (unsupported)"},
-            {"type": 4, "subtype": 1, "label": "No id, ignored"}
-          ]}}
-        ]}}}}}}}
+        {"raw": "FLAT_TEMPLATE", "time": "1700000000", "data": {"msg": {"hause": {
+          "city": {"name": "Example", "weather_code": "Example", "time_zone": "Europe/Ljubljana", "time_zone_code": "Europe/Ljubljana"},
+          "floors": {"floor": {"label": "Ground floor", "rooms": {"room": [
+            {"elements": {"element": [
+              {"id": 1, "type": 4, "subtype": 1, "label": "Kitchen light", "isflatdevice": 1},
+              {"id": 2, "type": 4, "subtype": 4, "label": "Bathroom fan", "isflatdevice": 1}
+            ]}},
+            {"elements": {"element": [
+              {"id": 3, "type": 6, "subtype": 1, "label": "Living room blind", "isflatdevice": 1},
+              {"id": 4, "type": 5, "label": "Dimmer (unsupported)", "isflatdevice": 1},
+              {"id": 5, "type": 18, "label": "Schedule (unsupported)", "isflatdevice": 0},
+              {"type": 4, "subtype": 1, "label": "No id, ignored"}
+            ]}}
+          ]}}}
+        }}}}
       ]
     },
     {
       "request": {"cmd": "FLAT_GET"},
       "response": [
         {"raw": "FLAT_NOTIFY", "time": "1700000000", "data": {"msg": {"response": {"device": [
-          {"id": 1, "type": 4, "attribute": [{"id": 1, "val": 1}]},
-          {"id": 2, "type": 4, "attribute": [{"id": 1, "val": 0}]},
-          {"id": 3, "type": 6, "attribute": [{"id": 1, "val": 30}, {"id": 2, "val": 0}, {"id": 3, "val": 0}]},
-          {"id": 4, "type": 5, "attribute": [{"id": 1, "val": 50}]}
+          {"id": 1, "type": 4, "attribute": [{"id": 1, "val": 1}], "setting": [{"id": 2, "val": 0}], "scenes": null, "schedule": null},
+          {"id": 2, "type": 4, "attribute": [{"id": 1, "val": 0}], "setting": [{"id": 2, "val": 0}], "scenes": null, "schedule": null},
+          {"id": 3, "type": 6, "attribute": [{"id": 1, "val": 30}, {"id": 2, "val": 30}, {"id": 3, "val": 0}, {"id": 4, "val": 21715}, {"id": 5, "val": 0}], "setting": 0, "scenes": null, "schedule": null},
+          {"id": 4, "type": 5, "attribute": [{"id": 1, "val": 50}, {"id": 2, "val": 0}], "setting": [{"id": 3, "val": 0}, {"id": 5, "val": 0}], "scenes": null, "schedule": null},
+          {"id": 5, "type": 18, "attribute": 0, "setting": [{"id": 1, "val": 0}], "scenes": null, "schedule": {"day": []}},
+          {"id": 6, "type": 5, "attribute": [{"id": 1, "val": 20}, {"id": 2, "val": 0}], "setting": [{"id": 3, "val": 0}, {"id": 5, "val": 0}], "scenes": null, "schedule": null}
         ]}}}}
       ]
     }

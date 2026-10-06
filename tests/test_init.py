@@ -17,7 +17,7 @@ from custom_components.entia.const import DOMAIN
 
 from .conftest import PASSWORD, USERNAME, until
 from .fake_ape import FakeApe
-from .test_client import light_event
+from .test_client import ack, light_event
 
 
 @pytest.fixture(autouse=True)
@@ -94,7 +94,7 @@ async def test_services_send_device_set(
     device_id: int,
     attribute: dict,
 ) -> None:
-    ape.reply("DEVICE_SET", [{"raw": "DEVICE_SET", "data": {}}])
+    ape.reply("DEVICE_SET", ack(device_id))
 
     await hass.services.async_call(
         platform, service, {"entity_id": entity_id(hass, platform, device_id), **data}, blocking=True
@@ -120,3 +120,17 @@ async def test_debug_logging_toggle_covers_client(hass: HomeAssistant) -> None:
     name = client_module._LOGGER.name
 
     assert any(name == logger or name.startswith(f"{logger}.") for logger in loggers), loggers
+
+
+async def test_setup_from_recorded_traffic(hass: HomeAssistant, ape: FakeApe) -> None:
+    ape.load("lights_cover_fan.log")
+    entry = MockConfigEntry(domain=DOMAIN, unique_id=USERNAME, data={CONF_USERNAME: USERNAME, CONF_PASSWORD: PASSWORD})
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    entities = er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)
+    assert sorted(e.domain for e in entities) == ["cover"] * 4 + ["fan"] * 2 + ["light"] * 17
+
+    ape.close()
+    assert await hass.config_entries.async_unload(entry.entry_id)

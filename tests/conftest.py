@@ -32,16 +32,19 @@ def isolate_client_state(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
-def fast_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Skip the client's rate limiting and reconnect back-off delays."""
+def sleeps(monkeypatch: pytest.MonkeyPatch) -> list[float]:
+    """Skip the client's rate limiting and reconnect back-off delays, recording them."""
+    delays: list[float] = []
 
     async def sleep(delay: float, result=None):
+        delays.append(delay)
         await asyncio.sleep(0)
         return result
 
     fake_asyncio = SimpleNamespace(**{k: getattr(asyncio, k) for k in dir(asyncio) if not k.startswith("__")})
     fake_asyncio.sleep = sleep
     monkeypatch.setattr(client_module, "asyncio", fake_asyncio)
+    return delays
 
 
 @pytest.fixture

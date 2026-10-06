@@ -7,10 +7,15 @@ client module and answers from a script of exchanges:
 * ``reply(cmd, response)`` queues a response for the next request with that ``cmd``
 * ``push(*events)`` queues events delivered to the next ``CHECK`` long poll
 
+The real server is a per-session message pipe: a request returns whatever is queued, which
+is not necessarily the reply to that request (see docs/plan.md, protocol notes). Scripts
+model that by queuing the recorded response for whichever command received it.
+
 Scripts can also be loaded from traffic fixtures in ``tests/fixtures/traffic``: hand-written
 JSON, or a Home Assistant debug log of the integration (the client logs every exchange).
-A ``CHECK`` with nothing scripted blocks like the real long poll until something is
-pushed, the client cancels it (``aclose``) or the fake is closed.
+A ``CHECK`` with nothing scripted blocks until something is pushed, the client cancels it
+(``aclose``) or the fake is closed. With ``heartbeat`` set it instead answers with a
+``FLAT_HEARTBEAT`` after that many seconds, like the real server does every ~3-8 s.
 """
 
 from __future__ import annotations
@@ -51,18 +56,20 @@ class FakeResponse:
 
 
 class FakeApe:
-    def __init__(self) -> None:
+    def __init__(self, heartbeat: float | None = None) -> None:
+        self.heartbeat = heartbeat
         self.requests: list[dict[str, Any]] = []
         self.unexpected: list[dict[str, Any]] = []
-        self._script: deque[tuple[str, Any]] = deque()
+        self._script: deque[tuple[str, Any, int]] = deque()
         self._wake = asyncio.Event()
         self._closed = False
+        self._polling = 0
 
     # Scripting
 
-    def reply(self, cmd: str, response: list[dict] | str | Exception) -> FakeApe:
+    def reply(self, cmd: str, response: list[dict] | str | Exception, status: int = 200) -> FakeApe:
         """Answer the next ``cmd`` request with a response list, raw text or an exception."""
-        self._script.append((cmd, response))
+        self._script.append((cmd, response, status))
         self._wake.set()
         return self
 
@@ -90,7 +97,12 @@ class FakeApe:
     @property
     def pending(self) -> list[str]:
         """Commands still waiting in the script."""
-        return [cmd for cmd, _ in self._script]
+        return [cmd for cmd, _, _ in self._script]
+
+    @property
+    def idle(self) -> bool:
+        """Script consumed and the client is back in a long poll, so every response was processed."""
+        return not self._script and self._polling > 0
 
     def commands(self, include_check: bool = False) -> list[str]:
         """Commands received so far, in order."""
@@ -115,18 +127,29 @@ class FakeApe:
         while True:
             self._wake.clear()
             if self._script and self._script[0][0] == cmd:
-                _, response = self._script.popleft()
+                _, response, status = self._script.popleft()
                 if isinstance(response, Exception):
                     raise response
                 if isinstance(response, str):
-                    return FakeResponse(response)
-                return FakeResponse(wrap(response))
+                    return FakeResponse(response, status)
+                return FakeResponse(wrap(response), status)
             if cmd != "CHECK":
                 self.unexpected.append(message)
                 return FakeResponse(wrap(HEARTBEAT))
             if self._closed:
                 return FakeResponse(wrap(HEARTBEAT))
-            await self._wake.wait()
+            self._polling += 1
+            try:
+                if self.heartbeat is None:
+                    await self._wake.wait()
+                else:
+                    try:
+                        async with asyncio.timeout(self.heartbeat):
+                            await self._wake.wait()
+                    except TimeoutError:
+                        return FakeResponse(wrap(HEARTBEAT))
+            finally:
+                self._polling -= 1
 
     def httpx(self) -> SimpleNamespace:
         """Replacement for the ``httpx`` module used by the client."""
