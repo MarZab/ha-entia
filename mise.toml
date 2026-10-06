@@ -1,0 +1,25 @@
+# Local development: `mise install && mise run install`, then `mise run test`.
+
+[tools]
+python = "3.14"
+uv = "latest"
+
+[env]
+_.python.venv = { path = ".venv", create = true }
+
+[tasks.install]
+description = "Install test and lint dependencies into .venv"
+run = "uv pip install -r requirements_test.txt"
+
+[tasks.test]
+description = "Run the test suite"
+run = "pytest"
+
+[tasks.lint]
+description = "Lint and check formatting"
+run = ["ruff check tests", "ruff format --check tests"]
+
+[tasks.format]
+description = "Format and autofix"
+run = ["ruff check --fix tests", "ruff format tests"]
+
