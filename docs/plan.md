@@ -58,16 +58,16 @@ passing tests as their phase lands.
 ### Phase 3 — entities
 
 - [x] `EntiaEntity`: device info as today, availability and updates from the hub (all platforms, not just covers) — done in phase 2
-- [ ] Light: `_attr_color_mode = ColorMode.ONOFF`, `_attr_supported_color_modes = {ColorMode.ONOFF}` (today `supported_color_modes` shows as `['f','f','n','o','o']`; xfail `test_light_supported_color_modes`)
+- [x] Light: `_attr_color_mode = ColorMode.ONOFF`, `_attr_supported_color_modes = {ColorMode.ONOFF}` (was `['f','f','n','o','o']`; former xfail `test_light_supported_color_modes` passes)
 - [x] Fan, cover: same features as today, including the cover tilt buttons (±1 % position nudge) — done in phase 2
-- [ ] Status sensor (`SensorDeviceClass.ENUM`: `off`, `connecting`, `connected`, `idle`, `reconnecting`, `auth_failed`), unique id `{flat}-status`
-- [ ] Connection switch (master), unique id `{flat}-connection`, persisted
+- [x] Status sensor (`SensorDeviceClass.ENUM`: `off`, `connecting`, `connected`, `reconnecting`, `auth_failed`; `idle` comes with phase 4), unique id `{flat}-status`, diagnostic, `sensor.entia_status` on a fresh install
+- [x] Connection switch (master), unique id `{flat}-connection`, config category, persisted with the template cache (default on), `switch.entia_connection` on a fresh install. On an existing install Home Assistant names the new entities after the user's device name and area (e.g. `sensor.living_room_flat_status`); existing ids are untouched (`tests/test_upgrade.py`)
 
 ### Phase 4 — connection policy
 
 - [ ] Inactivity timer, option `timeout` (minutes, `0` = never) via options flow; reset on HA commands and on changed pushed values only
 - [ ] Idle close keeps last known states available; a command reconnects, waits for ready (30 s), then sends; a failed reconnect fails the command and moves to `reconnecting`
-- [ ] Switch off closes the session, entities unavailable, commands raise `HomeAssistantError`
+- [x] Switch off closes the session, entities unavailable, commands raise `HomeAssistantError` (done in phase 3; `tests/test_connection.py`, mutation-checked)
 - [ ] Tests with time travel for every transition in the architecture doc's table
 
 ### Phase 5 — cleanup
