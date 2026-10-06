@@ -1,7 +1,7 @@
 # Architecture (refactor)
 
 The integration is rebuilt around a Home Assistant–free protocol library (`api/`) and a hub that
-owns the connection policy. This replaces `client/__init__.py` and the per-platform glue.
+owns the connection policy. It replaced the original `client/` package and per-platform glue.
 
 ## Requirements
 
@@ -129,7 +129,7 @@ Transitions:
 
 ## Testing
 
-- `tests/api/`: transport, messages and session against `FakeApe` and the recordings (ports today's client tests; today's
+- `tests/api/`: transport, messages and session against `FakeApe` and the recordings (ported from the original client tests; their
   xfails become passing tests).
 - `tests/`: Home Assistant level — golden entity-id test, config/reauth/options flows, connection switch, status
   sensor, inactivity timeout with time travel (`freezer` / `async_fire_time_changed`), on-demand reconnect, unload.

@@ -30,7 +30,7 @@ loads automatically and git ignores.
 
 ## Capturing traffic
 
-`dev/configuration.yaml` enables debug logging for `custom_components.entia`, so the client
+`dev/configuration.yaml` enables debug logging for `custom_components.entia`, so the integration
 writes every exchange with the Entia server to `dev/config/home-assistant.log` as one
 `Exchange {json}` line, including idle heartbeats and long polls cancelled to send a command.
 Credentials and session identifiers are redacted.

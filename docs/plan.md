@@ -17,10 +17,10 @@ a connection switch and an inactivity timeout.
 
 - [ ] Add `documentation` and `issue_tracker` URLs
 - [x] Remove unneeded `dependencies: ["recorder"]` (it broke setup without a database)
-- [ ] Remove empty `zeroconf`
-- [x] Drop `loggers: ["entia"]`; the client now logs under `custom_components.entia.client`, which the debug toggle already covers
+- [x] Remove empty `zeroconf`
+- [x] Drop `loggers: ["entia"]`; exchanges are logged under `custom_components.entia.api.transport`, which the debug toggle already covers
 - [ ] Confirm `codeowners`, `iot_class` (`cloud_push`), `integration_type`
-- [ ] Pin or drop `httpx` requirement (HA already ships it)
+- [x] Drop the `httpx` requirement: the integration uses Home Assistant's shared HTTP client (`requirements: []`)
 
 ## 3. Refactor
 
@@ -72,8 +72,8 @@ passing tests as their phase lands.
 
 ### Phase 5 — cleanup
 
-- [ ] Delete `client/`, the `isolate_client_state` fixture and obsolete tests
-- [ ] `ruff check custom_components` clean and part of `mise run lint`
+- [x] Delete `client/`, its tests (`test_client.py`, `test_debug_log.py`, root `test_recorded.py`), the `isolate_client_state` and `sleeps` fixtures and the fake's `httpx` shim; shared message helpers moved to `tests/messages.py`; the debug-log replay round trip moved to `tests/api/test_recorded.py`. No xfails remain
+- [x] `ruff check custom_components` clean and part of `mise run lint` / `mise run format`
 - [ ] Manual check in the dev instance: upgrade from the current version keeps entity ids and history
 
 Protocol notes from the first capture (`tests/fixtures/traffic/lights_cover_fan.log`):
@@ -111,16 +111,16 @@ Test suite: `tests/` with a fake APE server (`tests/fake_ape.py`) that replays t
 `tests/fixtures/traffic/`: hand-written JSON, or a Home Assistant debug log of the integration.
 
 Capturing traffic: enable debug logging on the Entia integration (Settings → Devices & services → Entia →
-Enable debug logging), use the devices, then disable it to download the log. The client writes one
+Enable debug logging), use the devices, then disable it to download the log. The transport writes one
 `Exchange {...}` JSON line per request/response (credentials redacted, including idle and cancelled long polls); drop the log
 into `tests/fixtures/traffic/` and `ape.load("<file>.log")` replays it. Known bugs are `xfail(strict=True)` tests, so fixing one makes the suite tell you
 to remove the marker.
 
 - [x] Fake APE server: scripted replies, pushed `CHECK` events, long-poll cancel, request log
-- [x] Client protocol tests: handshake, template/state parsing, cover inversion and clamping, commands, dedup, reconnects, exchange history
+- [x] Protocol tests (now `tests/api/`): handshake, template/state parsing, cover inversion and clamping, commands, dedup, reconnects, exchange history
 - [x] `pytest-homeassistant-custom-component` tests: config flow, setup, entities, services, pushed updates, unload
-- [x] Debug log capture: client logs each exchange as an `Exchange {json}` line at DEBUG; `FakeApe.load()` replays `.log` files directly
-- [x] First recording `lights_cover_fan.log` (login, lights, cover open/stop/close/stop, fan), anonymized; replayed at client and HA level in `tests/test_recorded.py`
+- [x] Debug log capture: each exchange is logged as an `Exchange {json}` line at DEBUG; `FakeApe.load()` replays `.log` files directly (old `custom_components.entia.client` lines included)
+- [x] First recording `lights_cover_fan.log` (login, lights, cover open/stop/close/stop, fan), anonymized; replayed at session and HA level (`tests/api/test_recorded.py`, `tests/test_init.py`, `tests/test_upgrade.py`)
 - [ ] Heartbeat recording: leave the dev instance idle for >1 h to measure long poll duration/heartbeat interval and see the hourly refresh
 - [ ] More recordings: full cover travel without stop, events triggered from the official app/wall switches, session expiry/reconnect, wrong PIN, network drop
 - [ ] Make anonymizing captures part of `mise run traffic` (labels, city, flat id) so recordings can be committed without manual review
