@@ -30,9 +30,22 @@ conventions.
 - [ ] Config flow: implement `_validate_input` (attempt login, map to `invalid_auth` / `cannot_connect` / `unknown`) (xfail: `test_user_flow_rejects_bad_credentials`)
 - [ ] Move `available` to `EntiaEntity` so lights and fans also report offline state
 - [ ] Propagate availability changes to entities when the client disconnects/reconnects (currently only per-device updates trigger a state write)
+- [x] Debug log leaked the Entia ID: `FLAT_LOGIN` returns it as `login_hash`; also `sessionkey`, `sessid`, `pubid`/`pipe` were logged. All are now redacted
+- [ ] Rate limiting (20 messages / 20 s) delays commands: each command costs a `DEVICE_SET` plus long polls, a quick on/off sequence held a fan command for ~6 s. Throttle only the polling loop, not user commands (xfail: `test_commands_are_not_rate_limited`)
+- [ ] Connect retry back-off doubles without a cap (2, 4, 8 … s); after a long outage it waits for hours. Cap it (e.g. 5 min) and reset after a successful login (xfail: `test_connect_back_off_is_capped`)
+- [ ] Connect failures are only logged at DEBUG, so a failing integration looks idle; log the first failure (with history) at WARNING and recovery at INFO (xfail: `test_connect_failure_is_logged_as_warning`)
+- [ ] Check the HTTP status before parsing: a proxy/server 403 is reported as "Response malformed" (xfail: `test_http_error_reports_status`)
 - [ ] `stop()` waits for the in-flight 120s long poll, so unloading/reloading the entry can hang for up to 2 minutes; close the pending request on stop (xfail: `test_stop_interrupts_long_poll`)
 
 ## 4. Client cleanup
+
+Protocol notes from the first capture (`tests/fixtures/traffic/lights_cover_fan.log`):
+
+- APE is a per-session message pipe: a request returns whatever is queued, not its own reply (`FLAT_GET_TEMPLATE` got a heartbeat, the template came on the next `CHECK`; `DEVICE_SET` acks arrive on later polls). Don't pair responses with requests
+- Template element ids are ints; elements have `id`, `label`, `type`, `subtype`, `isflatdevice`; one floor, rooms as a list
+- `FLAT_NOTIFY` lists 35 devices, the template only 29: 5 dimmers (type 5) and one type-4 switch are missing from the template
+- Cover (type 6, subtype 1) attributes 1-5: 1 = closed %, 2 = same as 1 when stopped (target?), 3 = direction, 4 = counter-like, 5 = 0
+- Lights/fans (type 4) carry `setting` id 2; type 11 (HMI) has scenes (Away, Cosy, Day, Evening, Morning, Night); type 18 are schedules
 
 - [x] Keep the last 10 request/response exchanges (credentials redacted) and print them on every error path; attached to raised exceptions as a note (`EntiaClient.history`, `format_history()`)
 - [ ] Reuse one HTTP client (`homeassistant.helpers.httpx_client.get_async_client`) instead of creating an `AsyncClient` per request (avoids blocking SSL context load in the event loop)
@@ -71,7 +84,7 @@ Test suite: `tests/` with a fake APE server (`tests/fake_ape.py`) that replays t
 
 Capturing traffic: enable debug logging on the Entia integration (Settings → Devices & services → Entia →
 Enable debug logging), use the devices, then disable it to download the log. The client writes one
-`Exchange {...}` JSON line per request/response (credentials redacted, idle long polls skipped); drop the log
+`Exchange {...}` JSON line per request/response (credentials redacted, including idle and cancelled long polls); drop the log
 into `tests/fixtures/traffic/` and `ape.load("<file>.log")` replays it. Known bugs are `xfail(strict=True)` tests, so fixing one makes the suite tell you
 to remove the marker.
 
@@ -79,9 +92,16 @@ to remove the marker.
 - [x] Client protocol tests: handshake, template/state parsing, cover inversion and clamping, commands, dedup, reconnects, exchange history
 - [x] `pytest-homeassistant-custom-component` tests: config flow, setup, entities, services, pushed updates, unload
 - [x] Debug log capture: client logs each exchange as an `Exchange {json}` line at DEBUG; `FakeApe.load()` replays `.log` files directly
-- [ ] Record real traffic with the dev instance (`mise run ha`, then `mise run traffic <name>`): startup, toggling each light/fan, moving/stopping each cover, session expiry/reconnect, wrong PIN; trim device/room names before committing
+- [x] First recording `lights_cover_fan.log` (login, lights, cover open/stop/close/stop, fan), anonymized; replayed at client and HA level in `tests/test_recorded.py`
+- [ ] Heartbeat recording: leave the dev instance idle for >1 h to measure long poll duration/heartbeat interval and see the hourly refresh
+- [ ] More recordings: full cover travel without stop, events triggered from the official app/wall switches, session expiry/reconnect, wrong PIN, network drop
+- [ ] Make anonymizing captures part of `mise run traffic` (labels, city, flat id) so recordings can be committed without manual review
+- [ ] Find where the web app gets dimmers (type 5) that are missing from the template; add dimmer `light` support with brightness
+- [ ] Consider scene entities for the HMI (type 11) scenes
 - [ ] Look at the official web app's traffic in browser dev tools to find commands we don't use yet (dimmers type 5, tilt, scenes)
 - [ ] Replace `synthetic_startup.json` with a reviewed real capture; verify response shapes (`DEVICE_SET` reply, `ERR` codes, id types int vs str)
+- [x] Synthetic fixture and test helpers use recorded shapes (IDENT `casttype`, template `city`/`isflatdevice`, cover subtype 1 with 5 attributes, light `setting`, `DEVICE_SET` ack `{"msg":{"id"}}`, schedules with `"attribute": 0`, dimmers only in states)
+- [x] Tests for observed server behaviour: template on a later poll, acks on a later poll, events inside a command response, heartbeat polling (`FakeApe(heartbeat=…)`), hourly and stuck-cover refresh, HTTP error retry
 - [ ] Add tests per recorded scenario; turn surprises into xfail tests first
 - [ ] Add coverage reporting (`pytest-cov`) and run tests + lint in GitHub Actions
 - [ ] Lint the integration code (`ruff check custom_components`, 31 findings now) and add it to `mise run lint`
