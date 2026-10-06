@@ -14,6 +14,7 @@ from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.entia import client as client_module
+from custom_components.entia import hub as hub_module
 from custom_components.entia.client import EntiaClient
 from custom_components.entia.const import DOMAIN
 
@@ -58,6 +59,12 @@ def ape(monkeypatch: pytest.MonkeyPatch) -> FakeApe:
     """Fake Entia server wired into the client module."""
     fake = FakeApe()
     monkeypatch.setattr(client_module, "httpx", fake.httpx())
+
+    async def no_delay(delay: float) -> None:
+        await asyncio.sleep(0)
+
+    monkeypatch.setattr(hub_module, "get_async_client", lambda hass: fake.http_client())
+    monkeypatch.setattr(hub_module, "_sleep", no_delay)
     yield fake
     fake.close()
     assert fake.unexpected == [], f"unscripted requests: {fake.unexpected}"

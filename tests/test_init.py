@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.entia import client as client_module
+from custom_components.entia.api import transport as transport_module
 from custom_components.entia.const import DOMAIN
 
 from .conftest import PASSWORD, USERNAME, entity_id, until
@@ -94,7 +94,7 @@ async def test_unload(hass: HomeAssistant, entry: MockConfigEntry, ape: FakeApe)
 async def test_debug_logging_toggle_covers_client(hass: HomeAssistant) -> None:
     """The integration's "Enable debug logging" option must include the client's exchange log."""
     loggers = await get_integration_loggers(hass, DOMAIN)
-    name = client_module._LOGGER.name
+    name = transport_module._LOGGER.name
 
     assert any(name == logger or name.startswith(f"{logger}.") for logger in loggers), loggers
 

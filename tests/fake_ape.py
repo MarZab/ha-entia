@@ -60,6 +60,8 @@ class FakeResponse:
 class FakeApe:
     def __init__(self, heartbeat: float | None = None) -> None:
         self.heartbeat = heartbeat
+        # unreachable: every request fails like a network error
+        self.down = False
         self.requests: list[dict[str, Any]] = []
         self.unexpected: list[dict[str, Any]] = []
         self._script: deque[tuple[str, Any, int]] = deque()
@@ -140,6 +142,9 @@ class FakeApe:
             self.in_flight -= 1
 
     async def _handle(self, url: str) -> FakeResponse:
+        if self.down:
+            await asyncio.sleep(0)
+            raise ConnectionError("server unreachable")
         message = parse_request(url)
         self.requests.append(message)
         self.times.append(self.clock())

@@ -1,0 +1,29 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "description": "Enter the Entia ID and PIN you use for the Entia app.",
+        "data": {
+          "username": "Entia ID",
+          "password": "PIN"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Log in to Entia again",
+        "description": "Entia rejected the PIN for {username}. Enter the current PIN.",
+        "data": {
+          "password": "PIN"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect",
+      "invalid_auth": "Invalid Entia ID or PIN",
+      "unknown": "Unexpected error"
+    },
+    "abort": {
+      "already_configured": "This Entia ID is already configured",
+      "reauth_successful": "Re-authentication was successful"
+    }
+  }
+}
