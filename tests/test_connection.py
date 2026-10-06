@@ -42,7 +42,7 @@ async def test_entities(hass: HomeAssistant, entry: MockConfigEntry) -> None:
     state = hass.states.get(STATUS)
     assert state.state == "connected"
     assert state.name == "Entia Status"
-    assert state.attributes["options"] == ["off", "connecting", "connected", "reconnecting", "auth_failed"]
+    assert state.attributes["options"] == ["off", "connecting", "connected", "idle", "reconnecting", "auth_failed"]
 
     connection = registry.async_get(CONNECTION)
     assert (connection.unique_id, connection.entity_category) == ("100-connection", "config")

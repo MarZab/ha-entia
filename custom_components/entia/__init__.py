@@ -19,8 +19,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: EntiaConfigEntry) -> boo
     await hub.async_setup()
     entry.runtime_data = hub
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
     hub.async_start()
     return True
+
+
+async def _async_options_updated(hass: HomeAssistant, entry: EntiaConfigEntry) -> None:
+    """A changed timeout applies to the running connection, no reload needed."""
+    entry.runtime_data.async_options_updated()
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: EntiaConfigEntry) -> bool:

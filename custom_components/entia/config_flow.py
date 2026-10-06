@@ -7,11 +7,13 @@ from collections.abc import Mapping
 from typing import Any
 
 import voluptuous as vol
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
+from homeassistant.core import callback
+from homeassistant.helpers.selector import NumberSelector, NumberSelectorConfig, NumberSelectorMode
 
 from .api import AuthError, EntiaError
-from .const import DOMAIN, READY_TIMEOUT
+from .const import CONF_TIMEOUT, DEFAULT_TIMEOUT, DOMAIN, MAX_TIMEOUT, READY_TIMEOUT
 from .hub import create_session
 
 _LOGGER = logging.getLogger(__name__)
@@ -24,6 +26,11 @@ class EntiaConfigFlow(ConfigFlow, domain=DOMAIN):
     """Add an Entia flat with its Entia ID and PIN."""
 
     VERSION = 1
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> EntiaOptionsFlow:
+        return EntiaOptionsFlow()
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         errors: dict[str, str] = {}
@@ -74,3 +81,23 @@ class EntiaConfigFlow(ConfigFlow, domain=DOMAIN):
         finally:
             await session.close()
         return {}
+
+
+class EntiaOptionsFlow(OptionsFlow):
+    """Inactivity timeout."""
+
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        if user_input is not None:
+            return self.async_create_entry(data={CONF_TIMEOUT: int(user_input[CONF_TIMEOUT])})
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_TIMEOUT, default=self.config_entry.options.get(CONF_TIMEOUT, DEFAULT_TIMEOUT)
+                ): NumberSelector(
+                    NumberSelectorConfig(
+                        min=0, max=MAX_TIMEOUT, step=1, unit_of_measurement="min", mode=NumberSelectorMode.BOX
+                    )
+                ),
+            }
+        )
+        return self.async_show_form(step_id="init", data_schema=schema)

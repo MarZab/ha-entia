@@ -34,6 +34,7 @@
           "off": "Off",
           "connecting": "Connecting",
           "connected": "Connected",
+          "idle": "Idle",
           "reconnecting": "Reconnecting",
           "auth_failed": "Login rejected"
         }
@@ -42,6 +43,19 @@
     "switch": {
       "connection": {
         "name": "Connection"
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Connection",
+        "data": {
+          "timeout": "Close the connection after inactivity"
+        },
+        "data_description": {
+          "timeout": "Minutes without any change (from Home Assistant, the Entia app or a wall switch) before the connection to Entia is closed. Devices keep their last state and the next command reconnects. 0 keeps the connection open."
+        }
       }
     }
   }

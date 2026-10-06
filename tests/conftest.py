@@ -105,3 +105,12 @@ def entity_id(hass: HomeAssistant, platform: str, device_id: int) -> str:
     found = registry.async_get_entity_id(platform, DOMAIN, f"100-{device_id}")
     assert found, f"no {platform} entity for device {device_id}"
     return found
+
+
+async def settle(condition: Callable[[], bool], rounds: int = 2000) -> None:
+    """Like ``until`` but without timers, for tests with a frozen clock (``freezer``)."""
+    for _ in range(rounds):
+        if condition():
+            return
+        await asyncio.sleep(0)
+    raise AssertionError("condition not reached")
