@@ -112,6 +112,11 @@ class FakeApe:
         """Received requests with the given command."""
         return [r for r in self.requests if r["cmd"] == cmd]
 
+    def reset(self) -> None:
+        """Drop what is left of the script and reopen, for a new session after a close."""
+        self._script.clear()
+        self._closed = False
+
     def close(self) -> None:
         """Release blocked long polls so a stopping client can exit."""
         self._closed = True

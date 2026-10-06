@@ -7,9 +7,15 @@ from collections.abc import AsyncIterator, Callable
 from types import SimpleNamespace
 
 import pytest
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.entia import client as client_module
 from custom_components.entia.client import EntiaClient
+from custom_components.entia.const import DOMAIN
 
 from .fake_ape import FakeApe
 
@@ -71,3 +77,24 @@ async def until(condition: Callable[[], bool], timeout: float = 2) -> None:
     async with asyncio.timeout(timeout):
         while not condition():
             await asyncio.sleep(0.001)
+
+
+@pytest.fixture
+async def entry(hass: HomeAssistant, ape: FakeApe) -> AsyncIterator[MockConfigEntry]:
+    """A loaded config entry backed by the synthetic startup traffic."""
+    ape.load("synthetic_startup.json")
+    entry = MockConfigEntry(domain=DOMAIN, unique_id=USERNAME, data={CONF_USERNAME: USERNAME, CONF_PASSWORD: PASSWORD})
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    yield entry
+    if entry.state is ConfigEntryState.LOADED:
+        ape.close()
+        assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+def entity_id(hass: HomeAssistant, platform: str, device_id: int) -> str:
+    registry = er.async_get(hass)
+    found = registry.async_get_entity_id(platform, DOMAIN, f"100-{device_id}")
+    assert found, f"no {platform} entity for device {device_id}"
+    return found

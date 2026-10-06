@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
-
 import pytest
 from homeassistant.components.logger.helpers import get_integration_loggers
 from homeassistant.config_entries import ConfigEntryState
@@ -15,7 +13,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.entia import client as client_module
 from custom_components.entia.const import DOMAIN
 
-from .conftest import PASSWORD, USERNAME, until
+from .conftest import PASSWORD, USERNAME, entity_id, until
 from .fake_ape import FakeApe
 from .test_client import ack, light_event
 
@@ -23,27 +21,6 @@ from .test_client import ack, light_event
 @pytest.fixture(autouse=True)
 def auto_enable_custom_integrations(enable_custom_integrations: None) -> None:
     """Allow Home Assistant to load custom_components/entia."""
-
-
-@pytest.fixture
-async def entry(hass: HomeAssistant, ape: FakeApe) -> AsyncIterator[MockConfigEntry]:
-    """A loaded config entry backed by the synthetic startup traffic."""
-    ape.load("synthetic_startup.json")
-    entry = MockConfigEntry(domain=DOMAIN, unique_id=USERNAME, data={CONF_USERNAME: USERNAME, CONF_PASSWORD: PASSWORD})
-    entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
-    yield entry
-    if entry.state is ConfigEntryState.LOADED:
-        ape.close()
-        assert await hass.config_entries.async_unload(entry.entry_id)
-
-
-def entity_id(hass: HomeAssistant, platform: str, device_id: int) -> str:
-    registry = er.async_get(hass)
-    found = registry.async_get_entity_id(platform, DOMAIN, f"100-{device_id}")
-    assert found, f"no {platform} entity for device {device_id}"
-    return found
 
 
 async def test_setup_creates_entities(hass: HomeAssistant, entry: MockConfigEntry) -> None:
