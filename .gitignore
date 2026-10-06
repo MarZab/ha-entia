@@ -6,3 +6,6 @@ __pycache__/
 .ruff_cache/
 mise.local.toml
 .idea/
+# development Home Assistant state and logs
+dev/config/
+compose.override.yaml

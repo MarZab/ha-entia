@@ -1,0 +1,15 @@
+# Development Home Assistant with the integration mounted from this checkout.
+#   mise run ha        start (http://localhost:8123)
+#   mise run ha-logs   follow the log
+# State lives in dev/config/ (git-ignored); dev/configuration.yaml is the committed config.
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:${HA_VERSION:-2026.9.4}
+    ports:
+      - "8123:8123"
+    volumes:
+      - ./dev/config:/config
+      - ./dev/configuration.yaml:/config/configuration.yaml:ro
+      - ./custom_components/entia:/config/custom_components/entia
+    environment:
+      TZ: ${TZ:-Europe/Ljubljana}

@@ -1,0 +1,8 @@
+# Configuration for the development instance in compose.yaml
+default_config:
+
+logger:
+  default: warning
+  logs:
+    # Logs every request/response with the Entia server as an "Exchange {json}" line
+    custom_components.entia: debug

@@ -23,3 +23,27 @@ run = ["ruff check tests", "ruff format --check tests"]
 description = "Format and autofix"
 run = ["ruff check --fix tests", "ruff format tests"]
 
+[tasks.ha]
+description = "Start the development Home Assistant (http://localhost:8123)"
+run = "docker compose up -d"
+
+[tasks.ha-logs]
+description = "Follow the development Home Assistant log"
+run = "docker compose logs -f homeassistant"
+
+[tasks.ha-restart]
+description = "Restart Home Assistant to load code changes"
+run = "docker compose restart homeassistant"
+
+[tasks.ha-down]
+description = "Stop the development Home Assistant"
+run = "docker compose down"
+
+[tasks.traffic]
+description = "Copy Entia exchanges from the development log into tests/fixtures/traffic/<name>.log"
+usage = 'arg "<name>" help="fixture name"'
+run = '''
+grep -h "\[custom_components\.entia\.client\] Exchange " dev/config/home-assistant.log.1 dev/config/home-assistant.log 2>/dev/null \
+  > "tests/fixtures/traffic/${usage_name}.log"
+echo "$(wc -l < "tests/fixtures/traffic/${usage_name}.log") exchanges -> tests/fixtures/traffic/${usage_name}.log"
+'''
