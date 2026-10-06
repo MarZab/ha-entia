@@ -1,8 +1,8 @@
 # HACS repackaging plan
 
-Goal: ship `custom_components/entia` as an installable HACS custom repository,
-fix known bugs in the integration, and bring it up to current Home Assistant
-conventions.
+Goal: ship `custom_components/entia` as an installable HACS custom repository, rebuilt per
+[`architecture.md`](architecture.md): same entities and entity ids, plus a connection status,
+a connection switch and an inactivity timeout.
 
 ## 1. Repository scaffolding
 
@@ -22,48 +22,72 @@ conventions.
 - [ ] Confirm `codeowners`, `iot_class` (`cloud_push`), `integration_type`
 - [ ] Pin or drop `httpx` requirement (HA already ships it)
 
-## 3. Bugs
+## 3. Refactor
 
-- [ ] `EntiaClient`: move class-level mutable state (`data`, `_signals`, `_callbacks`, `_queue`) into `__init__` so multiple config entries don't share devices (xfail: `test_clients_do_not_share_devices`; then drop the `isolate_client_state` test fixture)
-- [ ] `async_setup_entry`: wrap `wait('ready')` in a timeout and raise `ConfigEntryNotReady`; raise `ConfigEntryAuthFailed` on `BadCredentials`
-- [ ] Light: use `_attr_color_mode = ColorMode.ONOFF` and `_attr_supported_color_modes = {ColorMode.ONOFF}`
-- [ ] Config flow: implement `_validate_input` (attempt login, map to `invalid_auth` / `cannot_connect` / `unknown`) (xfail: `test_user_flow_rejects_bad_credentials`)
-- [ ] Move `available` to `EntiaEntity` so lights and fans also report offline state
-- [ ] Propagate availability changes to entities when the client disconnects/reconnects (currently only per-device updates trigger a state write)
-- [x] Debug log leaked the Entia ID: `FLAT_LOGIN` returns it as `login_hash`; also `sessionkey`, `sessid`, `pubid`/`pipe` were logged. All are now redacted
-- [ ] Rate limiting (20 messages / 20 s) delays commands: each command costs a `DEVICE_SET` plus long polls, a quick on/off sequence held a fan command for ~6 s. Throttle only the polling loop, not user commands (xfail: `test_commands_are_not_rate_limited`)
-- [ ] Connect retry back-off doubles without a cap (2, 4, 8 … s); after a long outage it waits for hours. Cap it (e.g. 5 min) and reset after a successful login (xfail: `test_connect_back_off_is_capped`)
-- [ ] Connect failures are only logged at DEBUG, so a failing integration looks idle; log the first failure (with history) at WARNING and recovery at INFO (xfail: `test_connect_failure_is_logged_as_warning`)
-- [ ] Check the HTTP status before parsing: a proxy/server 403 is reported as "Response malformed" (xfail: `test_http_error_reports_status`)
-- [ ] `stop()` waits for the in-flight 120s long poll, so unloading/reloading the entry can hang for up to 2 minutes; close the pending request on stop (xfail: `test_stop_interrupts_long_poll`)
+Design: [`architecture.md`](architecture.md). Each phase leaves the suite green; known-bug xfails turn into
+passing tests as their phase lands.
 
-## 4. Client cleanup
+### Phase 0 — guardrails (before touching code)
+
+- [ ] Golden entity-id test: pre-populate the entity and device registry in today's format (from `lights_cover_fan.log`), set up, assert every `entity_id` and the device are reused and nothing is duplicated
+- [ ] Capture today's entity behaviour that must not change (light/fan on/off, cover position/open/close/stop/tilt nudge) as HA-level tests if not already covered
+
+### Phase 1 — `api/` protocol library
+
+- [ ] `api/models.py`, `api/messages.py`: parse template (declared devices only), states and events; build commands
+- [ ] `api/transport.py`: injected `httpx.AsyncClient`, `json.dumps` payloads, HTTP status check, cancellable long poll, exchange log + history + redaction
+- [ ] `api/session.py`: message-pipe dispatcher, login, `AuthError` on `ERROR 401`, capped back-off (2 s → 5 min, reset on login), poll-only rate limit, command dedup, hourly and stuck-cover refresh, `close()` interrupts the long poll, no class-level state
+- [ ] Port client tests to `tests/api/`; resolves xfails `test_clients_do_not_share_devices`, `test_stop_interrupts_long_poll`, `test_connect_back_off_is_capped`, `test_http_error_reports_status`, `test_commands_are_not_rate_limited`
+- [ ] Connect failures logged once at WARNING with history, recovery at INFO (xfail `test_connect_failure_is_logged_as_warning`)
+- [ ] Trim the spoofed browser headers to what the server needs (verify with a capture)
+- [ ] Fixture loader and `mise run traffic` accept the new `custom_components.entia.api` logger as well as the old one
+
+### Phase 2 — hub and setup
+
+- [ ] `hub.py`: `EntiaHub` as `entry.runtime_data` (`EntiaConfigEntry`), template cache and switch state in a `Store`
+- [ ] Non-blocking setup from the cached template; first setup without cache connects with a timeout → `ConfigEntryNotReady`
+- [ ] `AuthError` → `ConfigEntryAuthFailed` + reauth flow (`async_step_reauth`)
+- [ ] Config flow validates the login and fetches the template (`invalid_auth` / `cannot_connect` / `unknown`; xfail `test_user_flow_rejects_bad_credentials`)
+- [ ] Template change (devices added/removed) reloads the entry
+- [ ] `ConfigFlowResult`, `strings.json` + `translations/en.json`
+
+### Phase 3 — entities
+
+- [ ] `EntiaEntity`: device info as today, availability and updates from the hub (all platforms, not just covers)
+- [ ] Light: `_attr_color_mode = ColorMode.ONOFF`, `_attr_supported_color_modes = {ColorMode.ONOFF}`
+- [ ] Fan, cover: same features as today, including the cover tilt buttons (±1 % position nudge)
+- [ ] Status sensor (`SensorDeviceClass.ENUM`: `off`, `connecting`, `connected`, `idle`, `reconnecting`, `auth_failed`), unique id `{flat}-status`
+- [ ] Connection switch (master), unique id `{flat}-connection`, persisted
+
+### Phase 4 — connection policy
+
+- [ ] Inactivity timer, option `timeout` (minutes, `0` = never) via options flow; reset on HA commands and on changed pushed values only
+- [ ] Idle close keeps last known states available; a command reconnects, waits for ready (30 s), then sends; a failed reconnect fails the command and moves to `reconnecting`
+- [ ] Switch off closes the session, entities unavailable, commands raise `HomeAssistantError`
+- [ ] Tests with time travel for every transition in the architecture doc's table
+
+### Phase 5 — cleanup
+
+- [ ] Delete `client/`, the `isolate_client_state` fixture and obsolete tests
+- [ ] `ruff check custom_components` clean and part of `mise run lint`
+- [ ] Manual check in the dev instance: upgrade from the current version keeps entity ids and history
 
 Protocol notes from the first capture (`tests/fixtures/traffic/lights_cover_fan.log`):
 
 - APE is a per-session message pipe: a request returns whatever is queued, not its own reply (`FLAT_GET_TEMPLATE` got a heartbeat, the template came on the next `CHECK`; `DEVICE_SET` acks arrive on later polls). Don't pair responses with requests
+- Idle `CHECK` returns a single `FLAT_HEARTBEAT` after ~3-8 s (median 6 s), so an idle connection makes ~10 requests/min
 - Template element ids are ints; elements have `id`, `label`, `type`, `subtype`, `isflatdevice`; one floor, rooms as a list
-- `FLAT_NOTIFY` lists 35 devices, the template only 29: 5 dimmers (type 5) and one type-4 switch are missing from the template
+- `FLAT_NOTIFY` lists 35 devices, the template only 29: 5 dimmers (type 5) and one type-4 switch are missing from the template (out of scope: not declared)
 - Cover (type 6, subtype 1) attributes 1-5: 1 = closed %, 2 = same as 1 when stopped (target?), 3 = direction, 4 = counter-like, 5 = 0
-- Lights/fans (type 4) carry `setting` id 2; type 11 (HMI) has scenes (Away, Cosy, Day, Evening, Morning, Night); type 18 are schedules
+- Lights/fans (type 4) carry `setting` id 2; type 11 (HMI) has scenes; type 18 are schedules
 
-- [x] Keep the last 10 request/response exchanges (credentials redacted) and print them on every error path; attached to raised exceptions as a note (`EntiaClient.history`, `format_history()`)
-- [ ] Reuse one HTTP client (`homeassistant.helpers.httpx_client.get_async_client`) instead of creating an `AsyncClient` per request (avoids blocking SSL context load in the event loop)
-- [x] Remove forced `_LOGGER.setLevel(logging.DEBUG)` (debug output is now controlled by HA's "Enable debug logging")
-- [ ] Build request payloads with `json.dumps` instead of string concatenation (escape username/password)
-- [ ] Review the spoofed browser headers; keep only what the server requires
-- [ ] Decide on cover tilt: drop the ±1 position "tilt" hack or document it
-- [ ] Remove misleading copy-pasted comments ("Add cover…" in light/fan)
+Done before the refactor:
 
-## 5. Modernise to current HA APIs
+- [x] Debug log leaked the Entia ID: `FLAT_LOGIN` returns it as `login_hash`; also `sessionkey`, `sessid`, `pubid`/`pipe` were logged. All are now redacted
+- [x] Keep the last 10 request/response exchanges (credentials redacted) and print them on every error path
+- [x] Remove forced `_LOGGER.setLevel(logging.DEBUG)`
 
-- [ ] `FlowResult` → `ConfigFlowResult`
-- [ ] `hass.data[DOMAIN]` → `entry.runtime_data` with a typed `EntiaConfigEntry`
-- [ ] Add `strings.json` alongside `translations/en.json`
-- [ ] Add reauth flow (`async_step_reauth`) to pair with `ConfigEntryAuthFailed`
-- [ ] Optional: diagnostics platform with credentials redacted (include `client.history`)
-
-## 6. Docker development environment
+## 4. Docker development environment
 
 - [x] `compose.yaml` running `ghcr.io/home-assistant/home-assistant` (`HA_VERSION`, default 2026.9.4, same as the test harness)
 - [x] Bind-mount `custom_components/entia` into `/config/custom_components/entia` for live editing
@@ -77,7 +101,7 @@ Protocol notes from the first capture (`tests/fixtures/traffic/lights_cover_fan.
 - [ ] Optional: `debugpy` for attaching a debugger to the dev instance
 - [ ] Move development docs into the README when it is written
 
-## 7. Testing
+## 5. Testing
 
 Test suite: `tests/` with a fake APE server (`tests/fake_ape.py`) that replays traffic fixtures from
 `tests/fixtures/traffic/`: hand-written JSON, or a Home Assistant debug log of the integration.
@@ -96,13 +120,9 @@ to remove the marker.
 - [ ] Heartbeat recording: leave the dev instance idle for >1 h to measure long poll duration/heartbeat interval and see the hourly refresh
 - [ ] More recordings: full cover travel without stop, events triggered from the official app/wall switches, session expiry/reconnect, wrong PIN, network drop
 - [ ] Make anonymizing captures part of `mise run traffic` (labels, city, flat id) so recordings can be committed without manual review
-- [ ] Find where the web app gets dimmers (type 5) that are missing from the template; add dimmer `light` support with brightness
-- [ ] Consider scene entities for the HMI (type 11) scenes
-- [ ] Look at the official web app's traffic in browser dev tools to find commands we don't use yet (dimmers type 5, tilt, scenes)
 - [ ] Replace `synthetic_startup.json` with a reviewed real capture; verify response shapes (`DEVICE_SET` reply, `ERR` codes, id types int vs str)
 - [x] Synthetic fixture and test helpers use recorded shapes (IDENT `casttype`, template `city`/`isflatdevice`, cover subtype 1 with 5 attributes, light `setting`, `DEVICE_SET` ack `{"msg":{"id"}}`, schedules with `"attribute": 0`, dimmers only in states)
 - [x] Tests for observed server behaviour: template on a later poll, acks on a later poll, events inside a command response, heartbeat polling (`FakeApe(heartbeat=…)`), hourly and stuck-cover refresh, HTTP error retry
 - [ ] Add tests per recorded scenario; turn surprises into xfail tests first
 - [ ] Add coverage reporting (`pytest-cov`) and run tests + lint in GitHub Actions
-- [ ] Lint the integration code (`ruff check custom_components`, 31 findings now) and add it to `mise run lint`
 - [ ] Manually verify on a real HA instance: install via HACS custom repo, add entry, control light/fan/cover, restart, reload, remove
