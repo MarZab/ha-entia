@@ -3,8 +3,10 @@
   "name": "Entia",
   "codeowners": ["@marzab"],
   "config_flow": true,
+  "documentation": "https://github.com/marzab/ha-entia",
   "integration_type": "device",
   "iot_class": "cloud_push",
+  "issue_tracker": "https://github.com/marzab/ha-entia/issues",
   "requirements": [],
-  "version": "0.1.0"
+  "version": "0.2.0"
 }
