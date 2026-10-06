@@ -6,16 +6,16 @@ a connection switch and an inactivity timeout.
 
 ## 1. Repository scaffolding
 
-- [ ] Add `hacs.json` (`name`, minimum `homeassistant` version, `render_readme`)
-- [ ] Add `README.md` (features, supported devices, install via HACS, configuration, limitations)
-- [ ] Add `LICENSE`
-- [ ] Add `.github/workflows/validate.yml` running `hacs/action` and `home-assistant/actions/hassfest`
+- [x] Add `hacs.json` (`name`, minimum `homeassistant` 2026.9.0 = the tested version, `render_readme`)
+- [x] Add `README.md` (features, supported devices, install via HACS, configuration, connection switch and timeout, upgrading, troubleshooting)
+- [x] Add `LICENSE` (MIT)
+- [x] Add `.github/workflows/validate.yml` running `hacs/action` (brands check ignored until submitted) and `home-assistant/actions/hassfest`; `.github/workflows/tests.yml` runs ruff and pytest with the pinned `requirements_test.txt` (steps dry-run locally in a clean copy; the workflows themselves run once pushed)
 - [ ] Set GitHub repo description and topics (`home-assistant`, `hacs`, `integration`)
-- [ ] Tag a first release (version must match `manifest.json`)
+- [ ] Tag a first release `v0.2.0` (matches `manifest.json`)
 
 ## 2. Manifest
 
-- [ ] Add `documentation` and `issue_tracker` URLs
+- [x] Add `documentation` and `issue_tracker` URLs (`github.com/marzab/ha-entia`); version 0.2.0 for the refactor
 - [x] Remove unneeded `dependencies: ["recorder"]` (it broke setup without a database)
 - [x] Remove empty `zeroconf`
 - [x] Drop `loggers: ["entia"]`; exchanges are logged under `custom_components.entia.api.transport`, which the debug toggle already covers
@@ -100,10 +100,10 @@ Done before the refactor:
 - [x] Document usage in `docs/development.md`
 - [x] Local tooling via mise (`mise.toml`: Python, uv, `.venv`; tasks `install`, `test`, `lint`, `format`)
 - [ ] Verify `mise.toml` with a real mise install (mise download was blocked in the sandbox; the `traffic` task uses mise's `usage` args)
-- [ ] Pin `HA_VERSION` to the `hacs.json` minimum once decided
+- [x] `HA_VERSION` default 2026.9.4 matches the `hacs.json` minimum (2026.9) and the pinned test harness
 - [ ] Optionally install HACS in the dev instance to test the custom repository install path
 - [ ] Optional: `debugpy` for attaching a debugger to the dev instance
-- [ ] Move development docs into the README when it is written
+- [x] README links `docs/development.md` and `docs/architecture.md`
 
 ## 5. Testing
 
@@ -128,5 +128,6 @@ to remove the marker.
 - [x] Synthetic fixture and test helpers use recorded shapes (IDENT `casttype`, template `city`/`isflatdevice`, cover subtype 1 with 5 attributes, light `setting`, `DEVICE_SET` ack `{"msg":{"id"}}`, schedules with `"attribute": 0`, dimmers only in states)
 - [x] Tests for observed server behaviour: template on a later poll, acks on a later poll, events inside a command response, heartbeat polling (`FakeApe(heartbeat=…)`), hourly and stuck-cover refresh, HTTP error retry
 - [ ] Add tests per recorded scenario; turn surprises into xfail tests first
-- [ ] Add coverage reporting (`pytest-cov`) and run tests + lint in GitHub Actions
+- [x] Run tests + lint in GitHub Actions
+- [ ] Add coverage reporting (`pytest-cov`)
 - [ ] Manually verify on a real HA instance: install via HACS custom repo, add entry, control light/fan/cover, restart, reload, remove
