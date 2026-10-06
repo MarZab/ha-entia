@@ -29,8 +29,9 @@ passing tests as their phase lands.
 
 ### Phase 0 — guardrails (before touching code)
 
-- [ ] Golden entity-id test: pre-populate the entity and device registry in today's format (from `lights_cover_fan.log`), set up, assert every `entity_id` and the device are reused and nothing is duplicated
-- [ ] Capture today's entity behaviour that must not change (light/fan on/off, cover position/open/close/stop/tilt nudge) as HA-level tests if not already covered
+- [x] Golden entity-id test (`tests/test_upgrade.py`): registry pre-populated in today's format from `lights_cover_fan.log`, with entity ids that differ from freshly generated ones, a user-renamed and a disabled entity, and a renamed device in an area; setup must reuse all of them and create no duplicates. Also pins fresh-install ids (`<domain>.entia_<label>`), device identity and reload stability
+- [x] Behaviour pins (`tests/test_behaviour.py`): friendly names, light colour mode and features, fan features, cover device class/features/states/position mapping, tilt nudge with clamping; services already in `tests/test_init.py`
+- [x] Mutation-checked: changing the unique id format, the device identifier or the tilt step fails these tests
 
 ### Phase 1 — `api/` protocol library
 
@@ -54,7 +55,7 @@ passing tests as their phase lands.
 ### Phase 3 — entities
 
 - [ ] `EntiaEntity`: device info as today, availability and updates from the hub (all platforms, not just covers)
-- [ ] Light: `_attr_color_mode = ColorMode.ONOFF`, `_attr_supported_color_modes = {ColorMode.ONOFF}`
+- [ ] Light: `_attr_color_mode = ColorMode.ONOFF`, `_attr_supported_color_modes = {ColorMode.ONOFF}` (today `supported_color_modes` shows as `['f','f','n','o','o']`; xfail `test_light_supported_color_modes`)
 - [ ] Fan, cover: same features as today, including the cover tilt buttons (±1 % position nudge)
 - [ ] Status sensor (`SensorDeviceClass.ENUM`: `off`, `connecting`, `connected`, `idle`, `reconnecting`, `auth_failed`), unique id `{flat}-status`
 - [ ] Connection switch (master), unique id `{flat}-connection`, persisted
