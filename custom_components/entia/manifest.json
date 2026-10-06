@@ -4,7 +4,6 @@
   "codeowners": ["@marzab"],
   "config_flow": true,
   "integration_type": "device",
-  "dependencies": ["recorder"],
   "iot_class": "cloud_push",
   "loggers": ["entia"],
   "requirements": ["httpx"],
