@@ -15,11 +15,6 @@ _LOGGER = logging.getLogger(__name__)
 HISTORY_SIZE = 10
 # Maximum characters of a single request/response printed in an error report
 HISTORY_MAX_CHARS = 2000
-# Long poll responses that carry no information
-IDLE_RESPONSES = [
-    {'raw': 'FLAT_HEARTBEAT', 'data': 0},
-    {'raw': 'FLAT_EVENT', 'data': {'msg': {'response': {'device': 0}}}},
-]
 
 
 class EntiaClient:
@@ -351,10 +346,10 @@ class EntiaClient:
             except Exception as e:
                 entry['duration'] = time.time() - entry['time']
                 entry['error'] = repr(e)
+                self._log_exchange(entry)
                 if cancelable:
                     self._send_raw_cancelable = None
                     return []
-                self._log_exchange(entry)
                 raise RuntimeError("Error sending message", e)
 
             self._send_raw_cancelable = None
@@ -386,8 +381,10 @@ class EntiaClient:
 
     @staticmethod
     def _redact(text: str) -> str:
-        """Remove credentials from a logged message"""
-        return re.sub(r'"(username|password)":\s*"[^"]*"', r'"\1":"**REDACTED**"', text)
+        """Remove credentials and session identifiers from a logged message"""
+        # login_hash is the Entia ID (the username); sessid and pipe identify the live session
+        return re.sub(r'"(username|password|login_hash|sessionkey|sessid|pubid|pipe)":\s*"[^"]*"',
+                      r'"\1":"**REDACTED**"', text)
 
     def _log_exchange(self, entry: dict):
         """Log an exchange as one JSON line, the format tests replay from debug logs"""
@@ -403,13 +400,6 @@ class EntiaClient:
             response = self._decode(entry['response'])
             if response is None:
                 response = entry['response']  # malformed, keep raw text
-
-        # skip idle long polls, they are most of the traffic
-        if (isinstance(request, dict) and request.get('cmd') == 'CHECK' and entry['error'] is None
-                and isinstance(response, list)
-                and all(isinstance(x, dict) and {'raw': x.get('raw'), 'data': x.get('data')} in IDLE_RESPONSES
-                        for x in response)):
-            return
 
         _LOGGER.debug("Exchange %s", json.dumps({
             'request': request,

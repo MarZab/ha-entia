@@ -32,7 +32,8 @@ loads automatically and git ignores.
 
 `dev/configuration.yaml` enables debug logging for `custom_components.entia`, so the client
 writes every exchange with the Entia server to `dev/config/home-assistant.log` as one
-`Exchange {json}` line. Credentials are redacted and idle long polls are skipped.
+`Exchange {json}` line, including idle heartbeats and long polls cancelled to send a command.
+Credentials and session identifiers are redacted.
 
 1. `mise run ha`, add the Entia integration with your Entia ID and PIN.
 2. Do the thing you want to capture: toggle lights, move/stop covers, use the official app at

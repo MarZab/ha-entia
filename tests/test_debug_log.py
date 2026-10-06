@@ -41,25 +41,51 @@ async def test_exchanges_are_logged(client: EntiaClient, ape: FakeApe, caplog: p
     assert [x["request"]["cmd"] for x in logged] == ["CONNECT", "FLAT_CONNECT", "FLAT_GET_TEMPLATE", "FLAT_GET"]
     assert logged[1]["request"]["params"]["password"] == "**REDACTED**"
     assert logged[1]["request"]["params"]["username"] == "**REDACTED**"
-    assert logged[1]["response"] == [{"raw": "FLAT_LOGIN", "time": "1700000000", "data": {"flatid": "100"}}]
+    assert logged[1]["response"] == [
+        {
+            "raw": "FLAT_LOGIN",
+            "time": "1700000000",
+            "data": {"flatid": "100", "sessionkey": "**REDACTED**", "login_hash": "**REDACTED**"},
+        }
+    ]
+    assert logged[0]["response"][0]["data"]["sessid"] == "**REDACTED**"
+    assert logged[1]["request"]["params"]["pipe"] == "**REDACTED**"
     assert logged[1]["status"] == 200
     assert PASSWORD not in caplog.text
     assert USERNAME not in caplog.text
 
 
-async def test_idle_long_polls_are_not_logged(
-    client: EntiaClient, ape: FakeApe, caplog: pytest.LogCaptureFixture
-) -> None:
+async def test_idle_long_polls_are_logged(client: EntiaClient, ape: FakeApe, caplog: pytest.LogCaptureFixture) -> None:
     caplog.set_level(logging.DEBUG, logger=LOGGER)
     await start(client, ape)
 
-    ape.push({"raw": "FLAT_HEARTBEAT", "time": "1700000001", "data": 0})
-    ape.push({"raw": "FLAT_EVENT", "time": "1700000002", "data": {"msg": {"response": {"device": 0}}}})
+    heartbeat = {"raw": "FLAT_HEARTBEAT", "time": "1700000001", "data": 0}
+    empty_event = {"raw": "FLAT_EVENT", "time": "1700000002", "data": {"msg": {"response": {"device": 0}}}}
+    ape.push(heartbeat)
+    ape.push(empty_event)
     ape.push(light_event(1, on=False))
-    await until(lambda: not ape.pending and client.data["100-1"]["state"] == "off")
+    await until(lambda: ape.idle)
 
     checks = [x for x in exchanges(caplog) if x["request"]["cmd"] == "CHECK"]
-    assert [x["response"] for x in checks] == [[light_event(1, on=False)]]
+    assert [x["response"] for x in checks] == [[heartbeat], [empty_event], [light_event(1, on=False)]]
+
+
+async def test_cancelled_long_polls_are_logged(
+    client: EntiaClient, ape: FakeApe, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Commands interrupt the pending long poll; the log shows it as a CHECK with an error."""
+    caplog.set_level(logging.DEBUG, logger=LOGGER)
+    await start(client, ape)
+    await until(lambda: ape.idle)
+
+    ape.reply("DEVICE_SET", [{"raw": "DEVICE_SET", "data": {"msg": {"id": "1"}}}])
+    await client.request("100-1", {"state": "off"})
+    await until(lambda: ape.idle)
+
+    logged = exchanges(caplog)[4:]
+    assert [x["request"]["cmd"] for x in logged] == ["CHECK", "DEVICE_SET"]
+    assert logged[0]["response"] is None
+    assert "closed by client" in logged[0]["error"]
 
 
 async def test_failed_requests_are_logged(client: EntiaClient, ape: FakeApe, caplog: pytest.LogCaptureFixture) -> None:
