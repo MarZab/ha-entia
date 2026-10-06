@@ -9,7 +9,6 @@ import time
 
 import pytest
 
-from custom_components.entia import client as client_module
 from custom_components.entia.client import HISTORY_SIZE, BadCredentials, EntiaClient
 
 from .conftest import PASSWORD, USERNAME, until
@@ -451,30 +450,6 @@ async def test_http_error_reports_status(client: EntiaClient, ape: FakeApe, capl
 
     [failure] = [r for r in caplog.records if r.exc_info and r.getMessage().startswith("Error connecting")]
     assert "403" in str(failure.exc_info[1])
-
-
-@pytest.mark.xfail(strict=True, reason="the rate limit also delays user commands")
-async def test_commands_are_not_rate_limited(
-    client: EntiaClient, ape: FakeApe, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    await start(client, ape)
-    await until(lambda: ape.idle)
-    throttled: list[str] = []
-
-    async def sleep(delay: float, result=None):
-        throttled.append(ape.requests[-1]["cmd"] if delay else "")
-        await asyncio.sleep(0)
-
-    # the long poll in flight is the 21st message of a busy 20 s window
-    monkeypatch.setattr(client_module.asyncio, "sleep", sleep)
-    client._send_raw_window = time.time()
-    client._send_raw_messages = 20
-    ape.reply("DEVICE_SET", ack(1))
-    await client.request("100-1", {"state": "off"})
-    await until(lambda: ape.sent("DEVICE_SET"))
-
-    # a sleep while the cancelled CHECK is the last request delays the DEVICE_SET
-    assert "CHECK" not in throttled
 
 
 def test_redact_only_touches_credential_fields() -> None:

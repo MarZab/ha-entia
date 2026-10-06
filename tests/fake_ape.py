@@ -24,6 +24,7 @@ import asyncio
 import json
 import re
 from collections import deque
+from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Self
@@ -33,8 +34,9 @@ FIXTURES = Path(__file__).parent / "fixtures" / "traffic"
 
 HEARTBEAT = [{"raw": "FLAT_HEARTBEAT", "data": 0}]
 
-# Client debug log line, e.g. "... DEBUG (MainThread) [custom_components.entia.client] Exchange {...}"
-EXCHANGE_LINE = re.compile(r"\[custom_components\.entia\.client\] Exchange (\{.*\})$", re.MULTILINE)
+# Debug log line of an exchange, from the old client or the api transport, e.g.
+# "... DEBUG (MainThread) [custom_components.entia.api.transport] Exchange {...}"
+EXCHANGE_LINE = re.compile(r"\[custom_components\.entia\.(?:client|api\.transport)\] Exchange (\{.*\})$", re.MULTILINE)
 
 
 def wrap(response: list[dict]) -> str:
@@ -64,6 +66,11 @@ class FakeApe:
         self._wake = asyncio.Event()
         self._closed = False
         self._polling = 0
+        # request start times on ``clock`` (set it to the session's test clock) and overlap tracking
+        self.clock: Callable[[], float] = lambda: 0.0
+        self.times: list[float] = []
+        self.in_flight = 0
+        self.max_in_flight = 0
 
     # Scripting
 
@@ -125,8 +132,17 @@ class FakeApe:
     # Server
 
     async def handle(self, url: str) -> FakeResponse:
+        self.in_flight += 1
+        self.max_in_flight = max(self.max_in_flight, self.in_flight)
+        try:
+            return await self._handle(url)
+        finally:
+            self.in_flight -= 1
+
+    async def _handle(self, url: str) -> FakeResponse:
         message = parse_request(url)
         self.requests.append(message)
+        self.times.append(self.clock())
         cmd = message["cmd"]
 
         while True:
@@ -156,6 +172,10 @@ class FakeApe:
             finally:
                 self._polling -= 1
 
+    def http_client(self) -> FakeHttpClient:
+        """HTTP client to inject into ``api.Transport``; cancelling a request abandons it."""
+        return FakeHttpClient(self)
+
     def httpx(self) -> SimpleNamespace:
         """Replacement for the ``httpx`` module used by the client."""
         ape = self
@@ -184,3 +204,11 @@ class FakeApe:
                 raise ConnectionError("request closed by client")
 
         return SimpleNamespace(AsyncClient=AsyncClient)
+
+
+class FakeHttpClient:
+    def __init__(self, ape: FakeApe) -> None:
+        self._ape = ape
+
+    async def get(self, url: str, *, headers: dict[str, str], timeout: float) -> FakeResponse:
+        return await self._ape.handle(url)

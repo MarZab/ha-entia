@@ -43,7 +43,7 @@ run = "docker compose down"
 description = "Copy Entia exchanges from the development log into tests/fixtures/traffic/<name>.log"
 usage = 'arg "<name>" help="fixture name"'
 run = '''
-grep -h "\[custom_components\.entia\.client\] Exchange " dev/config/home-assistant.log.1 dev/config/home-assistant.log 2>/dev/null \
+grep -hE "\[custom_components\.entia\.(client|api\.transport)\] Exchange " dev/config/home-assistant.log.1 dev/config/home-assistant.log 2>/dev/null \
   > "tests/fixtures/traffic/${usage_name}.log"
 echo "$(wc -l < "tests/fixtures/traffic/${usage_name}.log") exchanges -> tests/fixtures/traffic/${usage_name}.log"
 '''
