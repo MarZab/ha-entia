@@ -58,7 +58,6 @@ async def test_light(hass: HomeAssistant, entry: MockConfigEntry, ape: FakeApe) 
     assert hass.states.get(light).attributes["color_mode"] is None
 
 
-@pytest.mark.xfail(strict=True, reason="supported_color_modes is the string 'onoff', HA turns it into its characters")
 async def test_light_supported_color_modes(hass: HomeAssistant, entry: MockConfigEntry) -> None:
     assert hass.states.get(entity_id(hass, "light", 1)).attributes["supported_color_modes"] == ["onoff"]
 

@@ -21,8 +21,8 @@ async def async_setup_entry(
 
 
 class EntiaLight(EntiaEntity, LightEntity):
-    color_mode = ColorMode.ONOFF
-    supported_color_modes = ColorMode.ONOFF
+    _attr_color_mode = ColorMode.ONOFF
+    _attr_supported_color_modes = {ColorMode.ONOFF}  # noqa: RUF012 - HA entity attribute
 
     @property
     def is_on(self) -> bool | None:
