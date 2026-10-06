@@ -164,6 +164,19 @@ async def test_wait_ready_timeout(session: Session, ape: FakeApe) -> None:
     ape.reset()
 
 
+async def test_wait_ready_fail_fast(session: Session, ape: FakeApe) -> None:
+    fail_connect(ape, 1)
+    ape.load("synthetic_startup.json")
+    session.start()
+
+    with pytest.raises(ConnectError, match="HTTP 403"):
+        await session.wait_ready(2, fail_fast=True)
+
+    # the session keeps retrying in the background
+    await session.wait_ready(2)
+    assert session.status is SessionStatus.CONNECTED
+
+
 async def test_close_interrupts_long_poll(session: Session, ape: FakeApe, recorder: Recorder) -> None:
     await start(session, ape)
     await until(lambda: ape.idle)

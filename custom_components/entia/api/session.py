@@ -90,6 +90,7 @@ class Session:
         self._ready = asyncio.Event()
         self._ended = asyncio.Event()
         self._error: Exception | None = None
+        self._failure_waiters: set[asyncio.Future[None]] = set()
         self._wake = asyncio.Event()
         self._commands: dict[int, tuple[Command, asyncio.Future[None]]] = {}
         self._requests: dict[str, dict[str, Any]] = {}
@@ -138,25 +139,33 @@ class Session:
         self._ended.set()
         self._set_status(SessionStatus.STOPPED)
 
-    async def wait_ready(self, timeout: float) -> None:
+    async def wait_ready(self, timeout: float, *, fail_fast: bool = False) -> None:
         """Wait until connected with fresh states.
 
         Raises AuthError if the login is rejected, Stopped if the session ends and TimeoutError.
+        With ``fail_fast`` the first connection failure is raised instead of waiting for a retry
+        (the session keeps retrying until closed).
         """
         if self.status is SessionStatus.CONNECTED:
             return
         if self._ended.is_set():
             raise self._error or Stopped("Session is not running")
-        waiters = {asyncio.ensure_future(self._ready.wait()), asyncio.ensure_future(self._ended.wait())}
+        failure: asyncio.Future[None] = asyncio.get_running_loop().create_future()
+        if fail_fast:
+            self._failure_waiters.add(failure)
+        waiters = {asyncio.ensure_future(self._ready.wait()), asyncio.ensure_future(self._ended.wait()), failure}
         try:
             await asyncio.wait(waiters, timeout=timeout, return_when=asyncio.FIRST_COMPLETED)
         finally:
+            self._failure_waiters.discard(failure)
             for waiter in waiters:
                 waiter.cancel()
         if self._ready.is_set():
             return
         if self._ended.is_set():
             raise self._error or Stopped("Session closed")
+        if failure.done() and not failure.cancelled() and failure.exception() is not None:
+            raise failure.exception()
         raise TimeoutError("Entia did not become ready in time")
 
     async def send(self, command: Command) -> None:
@@ -193,6 +202,9 @@ class Session:
                 except (ConnectError, ProtocolError, ServerError) as err:
                     self._ready.clear()
                     self._fail_commands(err)
+                    for waiter in self._failure_waiters:
+                        if not waiter.done():
+                            waiter.set_exception(err)
                     self._failures += 1
                     if self._failures == 1:
                         _LOGGER.warning(
