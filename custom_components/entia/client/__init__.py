@@ -3,13 +3,23 @@ from __future__ import annotations
 
 import time
 import re
+from collections import deque
 import logging
 import json
 import asyncio
 import httpx
 
-_LOGGER = logging.getLogger('entia')
-_LOGGER.setLevel(logging.DEBUG)
+_LOGGER = logging.getLogger(__name__)
+
+# Number of recent request/response exchanges kept for error reports
+HISTORY_SIZE = 10
+# Maximum characters of a single request/response printed in an error report
+HISTORY_MAX_CHARS = 2000
+# Long poll responses that carry no information
+IDLE_RESPONSES = [
+    {'raw': 'FLAT_HEARTBEAT', 'data': 0},
+    {'raw': 'FLAT_EVENT', 'data': {'msg': {'response': {'device': 0}}}},
+]
 
 
 class EntiaClient:
@@ -18,6 +28,7 @@ class EntiaClient:
     def __init__(self, username: str, password: str):
         self._username = username
         self._password = password
+        self._history: deque[dict] = deque(maxlen=HISTORY_SIZE)
 
     async def start(self, create_task=asyncio.create_task, task=None):
         """Main loop"""
@@ -84,7 +95,7 @@ class EntiaClient:
                 else:
                     for data in received_data:
                         if data['raw'] in ['ERR', 'FLAT_ERROR', 'FLAT_DISCONNECT', 'QUIT', 'DEVICE_SET_EXT']:
-                            _LOGGER.error("Server Error: %s", received_data)
+                            _LOGGER.error("Server Error: %s\n%s", received_data, self.format_history())
                             self._ready = False
                             self._connected = False
 
@@ -103,7 +114,8 @@ class EntiaClient:
                                     {'cmd': 'FLAT_GET', 'dedup': 'refresh', 'extra': ['"list":"all"', '"extended":1']})
 
                             except Exception as e:
-                                _LOGGER.warning(f"Malformed template: %s", received_data, exc_info=True)
+                                _LOGGER.warning("Malformed template: %s\n%s", received_data, self.format_history(),
+                                                exc_info=True)
                                 pass
 
                         elif data['raw'] == 'FLAT_NOTIFY' or data['raw'] == 'FLAT_EVENT':
@@ -111,7 +123,8 @@ class EntiaClient:
                                 await self._apply_states(data['data']['msg'])
 
                             except Exception as e:
-                                _LOGGER.warning(f"Malformed states: %s", received_data, exc_info=True)
+                                _LOGGER.warning("Malformed states: %s\n%s", received_data, self.format_history(),
+                                                exc_info=True)
                                 pass
 
                             if data['raw'] == 'FLAT_NOTIFY':
@@ -163,7 +176,7 @@ class EntiaClient:
                     received_data = await self._send(command=command, extra=extra, cancelable=cancelable)
                 except Exception as e:
                     # network error
-                    _LOGGER.exception("Network Error")
+                    _LOGGER.exception("Network Error\n%s", self.format_history())
                     self._ready = False
                     self._connected = False
                     continue  # while
@@ -171,6 +184,8 @@ class EntiaClient:
             # end while
 
         except Exception as e:
+            e.add_note(self.format_history())
+            _LOGGER.error("Client stopped on error", exc_info=e)
             self._last_error = e
 
         finally:
@@ -229,7 +244,7 @@ class EntiaClient:
                 ])
             except Exception as e:
                 # this is probably a network error
-                _LOGGER.exception("Error connecting")
+                _LOGGER.exception("Error connecting\n%s", self.format_history())
                 wait_for *= 2
                 await asyncio.sleep(wait_for)
                 continue
@@ -299,8 +314,15 @@ class EntiaClient:
         if not self._running:
             raise ClientStopped("Client stopped")
 
-        if '"cmd":"CHECK"' not in message:
-            _LOGGER.debug("Sending message %s", message)
+        entry = {
+            'time': time.time(),
+            'request': self._redact(message),
+            'status': None,
+            'response': None,
+            'error': None,
+            'duration': None,
+        }
+        self._history.append(entry)
 
         async with httpx.AsyncClient() as client:
             if cancelable:
@@ -327,27 +349,105 @@ class EntiaClient:
                     timeout=120  # long polling
                 )
             except Exception as e:
+                entry['duration'] = time.time() - entry['time']
+                entry['error'] = repr(e)
                 if cancelable:
                     self._send_raw_cancelable = None
                     return []
+                self._log_exchange(entry)
                 raise RuntimeError("Error sending message", e)
 
             self._send_raw_cancelable = None
             res_text = res.text
 
-        match = re.search(r'^Ape\.transport\.read\(\'(.+)\'\)', res_text)
-        if not match:
-            raise RuntimeError("Response malformed", {res_text: res_text})
-        res_json = json.loads(match.group(1))
+        entry['duration'] = time.time() - entry['time']
+        entry['status'] = res.status_code
+        entry['response'] = self._redact(res_text)
+        self._log_exchange(entry)
 
+        res_json = self._decode(res_text)
         if not res_json or not isinstance(res_json, list):
             raise RuntimeError("Response malformed", {res_text: res_text})
 
-        if ('"raw":"FLAT_HEARTBEAT","data":0' not in res_text and
-                '"raw":"FLAT_EVENT","data":{"msg":{"response":{"device":0}}}}' not in res_text):
-            _LOGGER.debug("Received message %s", res_json)
-
         return res_json
+
+    @staticmethod
+    def _decode(res_text: str):
+        """Decode an APE response body, None if malformed"""
+        match = re.search(r'^Ape\.transport\.read\(\'(.+)\'\)', res_text)
+        if not match:
+            return None
+        try:
+            return json.loads(match.group(1))
+        except ValueError:
+            return None
+
+    # Diagnostics
+
+    @staticmethod
+    def _redact(text: str) -> str:
+        """Remove credentials from a logged message"""
+        return re.sub(r'"(username|password)":\s*"[^"]*"', r'"\1":"**REDACTED**"', text)
+
+    def _log_exchange(self, entry: dict):
+        """Log an exchange as one JSON line, the format tests replay from debug logs"""
+        if not _LOGGER.isEnabledFor(logging.DEBUG):
+            return
+
+        try:
+            request = json.loads(entry['request'])[0]
+        except (ValueError, IndexError, KeyError):
+            request = entry['request']
+        response = None
+        if entry['response'] is not None:
+            response = self._decode(entry['response'])
+            if response is None:
+                response = entry['response']  # malformed, keep raw text
+
+        # skip idle long polls, they are most of the traffic
+        if (isinstance(request, dict) and request.get('cmd') == 'CHECK' and entry['error'] is None
+                and isinstance(response, list)
+                and all(isinstance(x, dict) and {'raw': x.get('raw'), 'data': x.get('data')} in IDLE_RESPONSES
+                        for x in response)):
+            return
+
+        _LOGGER.debug("Exchange %s", json.dumps({
+            'request': request,
+            'response': response,
+            'status': entry['status'],
+            'duration': round(entry['duration'], 3) if entry['duration'] is not None else None,
+            'error': entry['error'],
+        }, separators=(',', ':'), ensure_ascii=False))
+
+    @property
+    def history(self) -> list[dict]:
+        """Most recent request/response exchanges, oldest first, with credentials redacted"""
+        return [dict(x) for x in self._history]
+
+    def format_history(self) -> str:
+        """Format the most recent exchanges for an error report"""
+
+        def clip(text: str) -> str:
+            if len(text) <= HISTORY_MAX_CHARS:
+                return text
+            return text[:HISTORY_MAX_CHARS] + f'... ({len(text) - HISTORY_MAX_CHARS} more chars)'
+
+        if not self._history:
+            return "No Entia exchanges recorded"
+
+        lines = [f"Last {len(self._history)} Entia exchanges (oldest first):"]
+        for i, entry in enumerate(self._history, 1):
+            cmd = re.search(r'"cmd":"(\w+)"', entry['request'])
+            when = time.strftime('%H:%M:%S', time.localtime(entry['time']))
+            duration = f"{entry['duration']:.2f}s" if entry['duration'] is not None else 'pending'
+            status = f" HTTP {entry['status']}" if entry['status'] is not None else ''
+            lines.append(f"#{i} {when} {cmd.group(1) if cmd else '?'} ({duration}){status}")
+            lines.append(f"  > {clip(entry['request'])}")
+            if entry['response'] is not None:
+                lines.append(f"  < {clip(entry['response'])}")
+            if entry['error'] is not None:
+                lines.append(f"  ! {entry['error']}")
+        return '\n'.join(lines)
 
     # Device Data
 
