@@ -52,14 +52,17 @@ conventions.
 
 ## 6. Docker development environment
 
-- [ ] Add `docker-compose.yml` running the official `ghcr.io/home-assistant/home-assistant` image (pinned to the `hacs.json` minimum version)
-- [ ] Bind-mount `custom_components/entia` into `/config/custom_components/entia` for live editing
-- [ ] Keep HA config in a git-ignored `dev/config/` with a minimal `configuration.yaml` (`logger: entia: debug`, `debugpy` optional)
-- [ ] Optionally install HACS in the dev instance to test the custom repository install path
+- [x] `compose.yaml` running `ghcr.io/home-assistant/home-assistant` (`HA_VERSION`, default 2026.9.4, same as the test harness)
+- [x] Bind-mount `custom_components/entia` into `/config/custom_components/entia` for live editing
+- [x] Committed `dev/configuration.yaml` (`default_config`, debug logging for `custom_components.entia`); state in git-ignored `dev/config/`
+- [x] mise tasks `ha`, `ha-restart`, `ha-logs`, `ha-down`, and `traffic <name>` to copy logged exchanges into a fixture
+- [x] Document usage in `docs/development.md`
 - [x] Local tooling via mise (`mise.toml`: Python, uv, `.venv`; tasks `install`, `test`, `lint`, `format`)
-- [ ] Verify `mise.toml` with a real mise install (mise download was blocked in the sandbox)
-- [ ] Add a `mise run ha` task that starts the compose stack
-- [ ] Document usage in README (`docker compose up`, restart HA after code changes, port 8123)
+- [ ] Verify `mise.toml` with a real mise install (mise download was blocked in the sandbox; the `traffic` task uses mise's `usage` args)
+- [ ] Pin `HA_VERSION` to the `hacs.json` minimum once decided
+- [ ] Optionally install HACS in the dev instance to test the custom repository install path
+- [ ] Optional: `debugpy` for attaching a debugger to the dev instance
+- [ ] Move development docs into the README when it is written
 
 ## 7. Testing
 
@@ -76,7 +79,7 @@ to remove the marker.
 - [x] Client protocol tests: handshake, template/state parsing, cover inversion and clamping, commands, dedup, reconnects, exchange history
 - [x] `pytest-homeassistant-custom-component` tests: config flow, setup, entities, services, pushed updates, unload
 - [x] Debug log capture: client logs each exchange as an `Exchange {json}` line at DEBUG; `FakeApe.load()` replays `.log` files directly
-- [ ] Record real traffic with debug logging: startup, toggling each light/fan, moving/stopping each cover, session expiry/reconnect, wrong PIN; trim device/room names before committing
+- [ ] Record real traffic with the dev instance (`mise run ha`, then `mise run traffic <name>`): startup, toggling each light/fan, moving/stopping each cover, session expiry/reconnect, wrong PIN; trim device/room names before committing
 - [ ] Look at the official web app's traffic in browser dev tools to find commands we don't use yet (dimmers type 5, tilt, scenes)
 - [ ] Replace `synthetic_startup.json` with a reviewed real capture; verify response shapes (`DEVICE_SET` reply, `ERR` codes, id types int vs str)
 - [ ] Add tests per recorded scenario; turn surprises into xfail tests first
