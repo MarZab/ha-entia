@@ -46,18 +46,20 @@ passing tests as their phase lands.
 
 ### Phase 2 — hub and setup
 
-- [ ] `hub.py`: `EntiaHub` as `entry.runtime_data` (`EntiaConfigEntry`), template cache and switch state in a `Store`
-- [ ] Non-blocking setup from the cached template; first setup without cache connects with a timeout → `ConfigEntryNotReady`
-- [ ] `AuthError` → `ConfigEntryAuthFailed` + reauth flow (`async_step_reauth`)
-- [ ] Config flow validates the login and fetches the template (`invalid_auth` / `cannot_connect` / `unknown`; xfail `test_user_flow_rejects_bad_credentials`)
-- [ ] Template change (devices added/removed) reloads the entry
-- [ ] `ConfigFlowResult`, `strings.json` + `translations/en.json`
+- [x] `hub.py`: `EntiaHub` as `entry.runtime_data` (`EntiaConfigEntry`), template cache in a `Store` (`entia.<entry_id>`, removed with the entry; switch state follows in phase 3), session on HA's shared HTTP client as an entry background task
+- [x] Non-blocking setup from the cached template; first setup without cache connects and fails fast (`Session.wait_ready(fail_fast=True)`) → `ConfigEntryNotReady`
+- [x] `AuthError` → `ConfigEntryAuthFailed` at setup, `async_start_reauth` at runtime; reauth flow (`async_step_reauth_confirm`) asks for the PIN and reloads
+- [x] Config flow validates the login (`invalid_auth` / `cannot_connect` / `unknown`; former xfail `test_user_flow_rejects_bad_credentials` passes)
+- [x] Template change (devices, kinds or labels) updates the cache and reloads the entry
+- [x] `ConfigFlowResult`, `strings.json` + `translations/en.json`
+- [x] Light, fan and cover moved onto the hub (needed to switch Home Assistant to the new package); behaviour unchanged, guarded by phase 0 tests. HA no longer uses `client/`
+- [x] Tests: `tests/test_hub.py`, rewritten `tests/test_config_flow.py`; mutation-checked (setup waiting despite the cache, no runtime reauth, no reload on flat change, always-available entities all fail tests)
 
 ### Phase 3 — entities
 
-- [ ] `EntiaEntity`: device info as today, availability and updates from the hub (all platforms, not just covers)
+- [x] `EntiaEntity`: device info as today, availability and updates from the hub (all platforms, not just covers) — done in phase 2
 - [ ] Light: `_attr_color_mode = ColorMode.ONOFF`, `_attr_supported_color_modes = {ColorMode.ONOFF}` (today `supported_color_modes` shows as `['f','f','n','o','o']`; xfail `test_light_supported_color_modes`)
-- [ ] Fan, cover: same features as today, including the cover tilt buttons (±1 % position nudge)
+- [x] Fan, cover: same features as today, including the cover tilt buttons (±1 % position nudge) — done in phase 2
 - [ ] Status sensor (`SensorDeviceClass.ENUM`: `off`, `connecting`, `connected`, `idle`, `reconnecting`, `auth_failed`), unique id `{flat}-status`
 - [ ] Connection switch (master), unique id `{flat}-connection`, persisted
 
