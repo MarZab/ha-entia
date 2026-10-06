@@ -25,7 +25,7 @@ from custom_components.entia.api.messages import (
 )
 
 from ..fake_ape import wrap
-from ..test_client import cover_event, light_event, startup_responses
+from ..messages import cover_event, light_event, startup_responses
 
 TEMPLATE = Template(
     "100",

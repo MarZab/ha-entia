@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 from collections import Counter
+from pathlib import Path
+
+import pytest
 
 from custom_components.entia.api import (
     Command,
@@ -16,8 +20,8 @@ from custom_components.entia.api import (
 
 from ..conftest import until
 from ..fake_ape import FakeApe
-from ..test_recorded import RECORDING, recorded
-from .conftest import start
+from ..messages import RECORDING, cover_event, recorded
+from .conftest import FakeTime, Recorder, make_session, start
 
 
 def command(session: Session, device_set: dict) -> Command:
@@ -64,3 +68,32 @@ async def test_replay_commands(session: Session, ape: FakeApe) -> None:
     assert session.states[17241] == SwitchState(False)
     assert session.states[28106] == SwitchState(False)
     assert session.states[17232] == CoverState(1, CoverDirection.STOPPED)
+
+
+async def test_debug_log_replays(
+    session: Session, ape: FakeApe, fake_time: FakeTime, caplog: pytest.LogCaptureFixture, tmp_path: Path
+) -> None:
+    """A Home Assistant debug log of a session is a fixture: replaying it reaches the same state."""
+    caplog.set_level(logging.DEBUG, logger="custom_components.entia.api")
+    await start(session, ape)
+    ape.push(cover_event(3, 55, direction=2))
+    await until(lambda: ape.idle and session.states[3].direction is CoverDirection.CLOSING)
+    log = tmp_path / "home-assistant.log"
+    log.write_text(
+        "\n".join(
+            f"2026-10-06 12:00:00.000 {r.levelname} (MainThread) [{r.name}] {r.getMessage()}" for r in caplog.records
+        )
+        + "\n"
+    )
+
+    replay_ape = FakeApe()
+    replay_ape.load(str(log))
+    replayed = make_session(replay_ape, fake_time, Recorder())
+    replayed.start()
+    try:
+        await replayed.wait_ready(2)
+        await until(lambda: replay_ape.idle)
+        assert replayed.states == session.states
+        assert replay_ape.unexpected == []
+    finally:
+        await replayed.close()

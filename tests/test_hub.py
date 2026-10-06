@@ -17,7 +17,7 @@ from custom_components.entia.const import DOMAIN
 
 from .conftest import PASSWORD, USERNAME, entity_id, until
 from .fake_ape import FakeApe
-from .test_client import startup_responses
+from .messages import startup_responses
 
 TEMPLATE = Template(
     "100",

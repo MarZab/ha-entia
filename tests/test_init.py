@@ -15,7 +15,7 @@ from custom_components.entia.const import DOMAIN
 
 from .conftest import PASSWORD, USERNAME, entity_id, until
 from .fake_ape import FakeApe
-from .test_client import ack, light_event
+from .messages import ack, light_event
 
 
 @pytest.fixture(autouse=True)

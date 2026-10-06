@@ -19,7 +19,7 @@ from custom_components.entia.const import CONF_TIMEOUT, DOMAIN
 
 from .conftest import PASSWORD, USERNAME, entity_id, settle
 from .fake_ape import HEARTBEAT, FakeApe
-from .test_client import ack, light_event
+from .messages import ack, light_event
 
 STATUS = "sensor.entia_status"
 CONNECTION = "switch.entia_connection"

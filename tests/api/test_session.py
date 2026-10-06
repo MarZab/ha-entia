@@ -29,7 +29,7 @@ from custom_components.entia.api.session import (
 
 from ..conftest import PASSWORD, USERNAME, until
 from ..fake_ape import HEARTBEAT, FakeApe
-from ..test_client import ack, cover_event, light_event, startup_responses
+from ..messages import ack, cover_event, light_event, startup_responses
 from .conftest import FakeTime, Recorder, make_session, start
 
 STARTUP = ["CONNECT", "FLAT_CONNECT", "FLAT_GET_TEMPLATE", "FLAT_GET"]

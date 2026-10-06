@@ -18,7 +18,7 @@ from custom_components.entia.const import DOMAIN
 
 from .conftest import entity_id, until
 from .fake_ape import HEARTBEAT, FakeApe
-from .test_client import startup_responses
+from .messages import startup_responses
 
 STATUS = "sensor.entia_status"
 CONNECTION = "switch.entia_connection"

@@ -1,8 +1,9 @@
 """In-memory stand-in for the Entia APE long-polling server.
 
-The client talks to ``https://ape.entia.si/2/?<json>`` with plain GET requests and
-gets back ``Ape.transport.read('<json>')``. ``FakeApe`` replaces ``httpx`` inside the
-client module and answers from a script of exchanges:
+The session talks to ``https://ape.entia.si/2/?<json>`` with plain GET requests and gets
+back ``Ape.transport.read('<json>')``. ``FakeApe.http_client()`` is injected into
+``api.Transport`` (the ``ape`` fixture also wires it into the hub) and answers from a script
+of exchanges:
 
 * ``reply(cmd, response)`` queues a response for the next request with that ``cmd``
 * ``push(*events)`` queues events delivered to the next ``CHECK`` long poll
@@ -12,9 +13,9 @@ is not necessarily the reply to that request (see docs/plan.md, protocol notes).
 model that by queuing the recorded response for whichever command received it.
 
 Scripts can also be loaded from traffic fixtures in ``tests/fixtures/traffic``: hand-written
-JSON, or a Home Assistant debug log of the integration (the client logs every exchange).
-A ``CHECK`` with nothing scripted blocks until something is pushed, the client cancels it
-(``aclose``) or the fake is closed. With ``heartbeat`` set it instead answers with a
+JSON, or a Home Assistant debug log of the integration (every exchange is logged).
+A ``CHECK`` with nothing scripted blocks until something is pushed, the session abandons it
+(cancels the request) or the fake is closed. With ``heartbeat`` set it instead answers with a
 ``FLAT_HEARTBEAT`` after that many seconds, like the real server does every ~3-8 s.
 """
 
@@ -26,8 +27,7 @@ import re
 from collections import deque
 from collections.abc import Callable
 from pathlib import Path
-from types import SimpleNamespace
-from typing import Any, Self
+from typing import Any
 from urllib.parse import unquote
 
 FIXTURES = Path(__file__).parent / "fixtures" / "traffic"
@@ -180,35 +180,6 @@ class FakeApe:
     def http_client(self) -> FakeHttpClient:
         """HTTP client to inject into ``api.Transport``; cancelling a request abandons it."""
         return FakeHttpClient(self)
-
-    def httpx(self) -> SimpleNamespace:
-        """Replacement for the ``httpx`` module used by the client."""
-        ape = self
-
-        class AsyncClient:
-            def __init__(self, *args, **kwargs) -> None:
-                self._cancelled = asyncio.Event()
-
-            async def __aenter__(self) -> Self:
-                return self
-
-            async def __aexit__(self, *exc) -> None:
-                self._cancelled.set()
-
-            async def aclose(self) -> None:
-                self._cancelled.set()
-
-            async def get(self, url: str, **kwargs) -> FakeResponse:
-                request = asyncio.ensure_future(ape.handle(url))
-                cancelled = asyncio.ensure_future(self._cancelled.wait())
-                done, _ = await asyncio.wait({request, cancelled}, return_when=asyncio.FIRST_COMPLETED)
-                cancelled.cancel()
-                if request in done:
-                    return request.result()
-                request.cancel()
-                raise ConnectionError("request closed by client")
-
-        return SimpleNamespace(AsyncClient=AsyncClient)
 
 
 class FakeHttpClient:

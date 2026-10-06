@@ -15,7 +15,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from .conftest import entity_id, until
 from .fake_ape import FakeApe
-from .test_client import ack, cover_event, light_event
+from .messages import ack, cover_event, light_event
 
 
 @pytest.fixture(autouse=True)

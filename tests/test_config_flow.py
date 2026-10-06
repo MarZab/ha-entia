@@ -15,7 +15,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.entia.const import DOMAIN
 
 from .fake_ape import FakeApe
-from .test_client import startup_responses
+from .messages import startup_responses
 
 USER_INPUT = {CONF_USERNAME: "Test-Entia-ID", CONF_PASSWORD: "test-pin"}
 
