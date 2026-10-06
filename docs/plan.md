@@ -65,10 +65,10 @@ passing tests as their phase lands.
 
 ### Phase 4 — connection policy
 
-- [ ] Inactivity timer, option `timeout` (minutes, `0` = never) via options flow; reset on HA commands and on changed pushed values only
-- [ ] Idle close keeps last known states available; a command reconnects, waits for ready (30 s), then sends; a failed reconnect fails the command and moves to `reconnecting`
+- [x] Inactivity timer, option `timeout` (minutes, `0` = never, max 24 h) via options flow; applied by an update listener without reloading; reset on HA commands and on changed pushed values only (heartbeats, acks and unchanged states don't count)
+- [x] Idle close (`idle` status) keeps last known states available; a command reconnects, waits for ready (30 s, fail fast), then sends; a failed reconnect fails the command and moves to `reconnecting`. Commands while `connecting` also wait for ready
 - [x] Switch off closes the session, entities unavailable, commands raise `HomeAssistantError` (done in phase 3; `tests/test_connection.py`, mutation-checked)
-- [ ] Tests with time travel for every transition in the architecture doc's table
+- [x] Tests with time travel (`tests/test_timeout.py`, `freezer`) for the transitions in the architecture doc's table; mutation-checked (pushed changes or commands not counting, idle devices unavailable, no reconnect on demand, ignored option changes all fail tests)
 
 ### Phase 5 — cleanup
 
