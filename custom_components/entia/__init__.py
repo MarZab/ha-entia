@@ -8,7 +8,7 @@ from homeassistant.core import HomeAssistant
 
 from .hub import EntiaHub
 
-PLATFORMS = [Platform.COVER, Platform.FAN, Platform.LIGHT]
+PLATFORMS = [Platform.COVER, Platform.FAN, Platform.LIGHT, Platform.SENSOR, Platform.SWITCH]
 
 type EntiaConfigEntry = ConfigEntry[EntiaHub]
 

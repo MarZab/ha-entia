@@ -121,6 +121,13 @@ async def test_existing_install_keeps_entity_ids_and_device(hass: HomeAssistant,
     assert {uid: e.entity_id for uid, e in device_entities.items()} == expected
     assert not [e.entity_id for e in registered if re.search(r"_\d+$", e.entity_id) and "old_label" not in e.entity_id]
     assert device_entities[disabled_fan].disabled_by is er.RegistryEntryDisabler.USER
+    # the connection entities are new; Home Assistant names them after the user's device name and area
+    new = {e.unique_id: e.entity_id for e in registered if not ELEMENT_UNIQUE_ID.match(e.unique_id)}
+    assert new == {
+        f"{FLAT_ID}-status": "sensor.living_room_flat_status",
+        f"{FLAT_ID}-connection": "switch.living_room_flat_connection",
+    }
+    assert not set(new.values()) & set(expected.values())
 
     for unique_id, entity_id in expected.items():
         state = hass.states.get(entity_id)
@@ -150,6 +157,9 @@ async def test_fresh_install_entity_ids(hass: HomeAssistant, ape: FakeApe) -> No
         entity_id = entities.async_get_entity_id(domain, DOMAIN, f"{FLAT_ID}-{element_id}")
         assert entity_id == f"{domain}.entia_device_{element_id}"
         assert hass.states.get(entity_id).name == f"Entia Device {element_id}"
+
+    assert entities.async_get_entity_id("sensor", DOMAIN, f"{FLAT_ID}-status") == "sensor.entia_status"
+    assert entities.async_get_entity_id("switch", DOMAIN, f"{FLAT_ID}-connection") == "switch.entia_connection"
 
     [flat] = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
     assert (flat.identifiers, flat.name, flat.model, flat.manufacturer) == (

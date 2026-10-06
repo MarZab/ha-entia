@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
@@ -25,8 +26,18 @@ _LOGGER = logging.getLogger(__name__)
 # Replaced in tests to skip pacing and back-off delays
 _sleep = asyncio.sleep
 
-# Device entities are unavailable in these states
+# Device entities are unavailable in these session states
 UNAVAILABLE = frozenset({SessionStatus.STOPPED, SessionStatus.RECONNECTING, SessionStatus.AUTH_FAILED})
+
+
+class ConnectionStatus(StrEnum):
+    """What the status sensor shows."""
+
+    OFF = "off"
+    CONNECTING = "connecting"
+    CONNECTED = "connected"
+    RECONNECTING = "reconnecting"
+    AUTH_FAILED = "auth_failed"
 
 
 def create_session(hass: HomeAssistant, username: str, password: str, **callbacks: Any) -> Session:
@@ -41,6 +52,8 @@ class EntiaHub:
         self.hass = hass
         self.entry = entry
         self.template: Template | None = None
+        # the connection switch; off = never connect
+        self.enabled = True
         self.signal = f"{DOMAIN}_{entry.entry_id}_update"
         self._store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
         self.session = create_session(
@@ -64,6 +77,7 @@ class EntiaHub:
         stored = await self._store.async_load() or {}
         if "template" in stored:
             self.template = Template.from_dict(stored["template"])
+            self.enabled = stored.get("enabled", True)
             return
 
         self.session.start()
@@ -79,7 +93,8 @@ class EntiaHub:
         await self._async_save()
 
     def async_start(self) -> None:
-        self.session.start()
+        if self.enabled:
+            self.session.start()
 
     async def async_stop(self) -> None:
         await self.session.close()
@@ -101,13 +116,37 @@ class EntiaHub:
 
     @property
     def available(self) -> bool:
-        return self.session.status not in UNAVAILABLE
+        return self.enabled and self.session.status not in UNAVAILABLE
+
+    @property
+    def status(self) -> ConnectionStatus:
+        if not self.enabled:
+            return ConnectionStatus.OFF
+        return {
+            SessionStatus.CONNECTED: ConnectionStatus.CONNECTED,
+            SessionStatus.RECONNECTING: ConnectionStatus.RECONNECTING,
+            SessionStatus.AUTH_FAILED: ConnectionStatus.AUTH_FAILED,
+        }.get(self.session.status, ConnectionStatus.CONNECTING)
+
+    async def async_set_enabled(self, enabled: bool) -> None:
+        """Turn the connection on or off; remembered across restarts."""
+        if enabled == self.enabled:
+            return
+        self.enabled = enabled
+        await self._async_save()
+        if enabled:
+            self.session.start()
+        else:
+            await self.session.close()
+        async_dispatcher_send(self.hass, self.signal, None)
 
     def state(self, device_id: int) -> DeviceState | None:
         return self.session.states.get(device_id)
 
     async def async_send(self, command: Command) -> None:
         """Send a command, reporting failures to the caller."""
+        if not self.enabled:
+            raise HomeAssistantError("The Entia connection is turned off")
         if self.session.status is not SessionStatus.CONNECTED:
             raise HomeAssistantError(f"Entia is not connected ({self.session.status})")
         try:
@@ -140,4 +179,4 @@ class EntiaHub:
 
     async def _async_save(self) -> None:
         assert self.template is not None
-        await self._store.async_save({"template": self.template.as_dict()})
+        await self._store.async_save({"template": self.template.as_dict(), "enabled": self.enabled})

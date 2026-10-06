@@ -77,7 +77,7 @@ async def test_first_setup_caches_template(hass: HomeAssistant, ape: FakeApe, ha
 
     assert entry.state is ConfigEntryState.LOADED
     await until(lambda: f"{DOMAIN}.{entry.entry_id}" in hass_storage)
-    assert hass_storage[f"{DOMAIN}.{entry.entry_id}"]["data"] == {"template": TEMPLATE.as_dict()}
+    assert hass_storage[f"{DOMAIN}.{entry.entry_id}"]["data"] == {"template": TEMPLATE.as_dict(), "enabled": True}
     await unload(hass, entry, ape)
 
 
@@ -154,7 +154,7 @@ async def test_flat_change_reloads_with_new_devices(
     await hass.async_block_till_done()
 
     assert entry.state is ConfigEntryState.LOADED
-    assert hass_storage[f"{DOMAIN}.{entry.entry_id}"]["data"] == {"template": TEMPLATE.as_dict()}
+    assert hass_storage[f"{DOMAIN}.{entry.entry_id}"]["data"] == {"template": TEMPLATE.as_dict(), "enabled": True}
     await unload(hass, entry, ape)
 
 

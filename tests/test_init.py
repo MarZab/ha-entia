@@ -31,7 +31,8 @@ async def test_setup_creates_entities(hass: HomeAssistant, entry: MockConfigEntr
     cover = hass.states.get(entity_id(hass, "cover", 3))
     assert cover.state == STATE_OPEN
     assert cover.attributes["current_position"] == 70
-    assert len(er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)) == 3
+    entities = er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)
+    assert sorted(e.domain for e in entities) == ["cover", "fan", "light", "sensor", "switch"]
 
 
 async def test_entities_belong_to_flat_device(hass: HomeAssistant, entry: MockConfigEntry) -> None:
@@ -107,7 +108,7 @@ async def test_setup_from_recorded_traffic(hass: HomeAssistant, ape: FakeApe) ->
     await hass.async_block_till_done()
 
     entities = er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)
-    assert sorted(e.domain for e in entities) == ["cover"] * 4 + ["fan"] * 2 + ["light"] * 17
+    assert sorted(e.domain for e in entities) == ["cover"] * 4 + ["fan"] * 2 + ["light"] * 17 + ["sensor", "switch"]
 
     ape.close()
     assert await hass.config_entries.async_unload(entry.entry_id)

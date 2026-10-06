@@ -25,5 +25,24 @@
       "already_configured": "This Entia ID is already configured",
       "reauth_successful": "Re-authentication was successful"
     }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "name": "Status",
+        "state": {
+          "off": "Off",
+          "connecting": "Connecting",
+          "connected": "Connected",
+          "reconnecting": "Reconnecting",
+          "auth_failed": "Login rejected"
+        }
+      }
+    },
+    "switch": {
+      "connection": {
+        "name": "Connection"
+      }
+    }
   }
 }

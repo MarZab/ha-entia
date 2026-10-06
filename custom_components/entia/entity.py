@@ -46,3 +46,26 @@ class EntiaEntity(Entity):
 def declared(hub: EntiaHub, kind: DeviceKind) -> list[DeclaredDevice]:
     assert hub.template is not None
     return [d for d in hub.template.devices if d.kind is kind]
+
+
+class EntiaConnectionEntity(Entity):
+    """An entity about the flat's connection rather than a device; always available."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = True
+
+    def __init__(self, hub: EntiaHub, key: str) -> None:
+        assert hub.template is not None
+        self._hub = hub
+        # element unique ids are "<flat>-<number>", so these cannot collide
+        self._attr_unique_id = f"{hub.template.flat_id}-{key}"
+        self._attr_translation_key = key
+        self._attr_device_info = hub.device_info
+
+    async def async_added_to_hass(self) -> None:
+        self.async_on_remove(async_dispatcher_connect(self.hass, self._hub.signal, self._handle_update))
+
+    @callback
+    def _handle_update(self, device_id: int | None) -> None:
+        if device_id is None:
+            self.async_write_ha_state()
